@@ -1,0 +1,6 @@
+.env
+DATA/
+secrets/
+kis_config/
+*.csv
+__pycache__/
