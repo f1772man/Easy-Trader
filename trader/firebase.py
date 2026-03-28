@@ -11,6 +11,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 import pytz
 from google.cloud.firestore_v1.base_query import FieldFilter
+from http.client import RemoteDisconnected
 
 logger = logging.getLogger(__name__)
 
@@ -68,56 +69,56 @@ class FirebaseClient:
     def _ref(self, path: str):
         return self._db.reference(f"{ROOT}/{path}") if self._db else None
 
-    # ── Heartbeat (Realtime DB) ───────────────────────
-    def update_heartbeat(self, status: dict) -> bool:
-        ref = self._ref("system_status")
+    def _rtdb_update(self, path: str, data: dict, retries: int = 2) -> bool:
+        """Realtime DB update with silent retry on RemoteDisconnected."""
+        ref = self._ref(path)
         if not ref:
             return False
+        for attempt in range(retries + 1):
+            try:
+                ref.update(data)
+                return True
+            except (RemoteDisconnected, ConnectionResetError, OSError) as e:
+                if attempt < retries:
+                    logger.debug(f"[RTDB] 연결 끊김 → 재시도 {attempt + 1}/{retries} ({path}): {e}")
+                    time.sleep(0.5 * (attempt + 1))
+                else:
+                    logger.warning(f"[RTDB] {path} 업데이트 실패 (재시도 {retries}회 소진): {e}")
+                    return False
+            except Exception as e:
+                logger.error(f"[RTDB] {path} 업데이트 오류: {e}")
+                return False
+        return False
+
+    # ── Heartbeat (Realtime DB) ───────────────────────
+    def update_heartbeat(self, status: dict) -> bool:
         now = datetime.now(KST)
-        try:
-            ref.update({
-                "engine_running": status.get("running", False),
-                "api_connected":  True,
-                "last_heartbeat": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "next_run":       (now + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"),
-                "error_log": {
-                    "error_count_today": self._error_count_today,
-                    "recent_error":      self._recent_error,
-                },
-            })
-            return True
-        except Exception as e:
-            logger.error(f"heartbeat 실패: {e}")
-            return False
+        return self._rtdb_update("system_status", {
+            "engine_running": status.get("running", False),
+            "api_connected":  True,
+            "last_heartbeat": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "next_run":       (now + timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"),
+            "error_log": {
+                "error_count_today": self._error_count_today,
+                "recent_error":      self._recent_error,
+            },
+        })
 
     def log_error(self, error_msg: str) -> bool:
         self._error_count_today += 1
         self._recent_error = f"{datetime.now(KST).strftime('%H:%M:%S')} {error_msg[:100]}"
-        ref = self._ref("system_status/error_log")
-        if not ref:
-            return False
-        try:
-            ref.update({
-                "error_count_today": self._error_count_today,
-                "recent_error":      self._recent_error,
-            })
-            return True
-        except Exception as e:
-            logger.error(f"log_error 실패: {e}")
-            return False
+        return self._rtdb_update("system_status/error_log", {
+            "error_count_today": self._error_count_today,
+            "recent_error":      self._recent_error,
+        })
 
     def reset_error_count(self) -> bool:
         self._error_count_today = 0
         self._recent_error = "None"
-        ref = self._ref("system_status/error_log")
-        if not ref:
-            return False
-        try:
-            ref.update({"error_count_today": 0, "recent_error": "None"})
-            return True
-        except Exception as e:
-            logger.error(f"reset_error_count 실패: {e}")
-            return False
+        return self._rtdb_update("system_status/error_log", {
+            "error_count_today": 0,
+            "recent_error": "None",
+        })
 
     # ── 포지션 관리 (Firestore) ───────────────────────
     def save_trade_state(self, symbol: str, state: dict) -> bool:
@@ -228,18 +229,13 @@ class FirebaseClient:
                 logger.error(f"log_trade Firestore 실패: {e}")
 
         # Realtime DB latest_signal 갱신 (앱 실시간 표시용)
-        ref = self._ref("trade_signals/latest_signal")
-        if ref:
-            try:
-                ref.update({
-                    "type":      action,
-                    "symbol":    symbol,
-                    "name":      data.get("name", symbol),
-                    "price":     data.get("price", 0),
-                    "reason":    data.get("reason", ""),
-                    "timestamp": ts,
-                })
-            except Exception as e:
-                logger.error(f"log_trade Realtime DB 실패: {e}")
+        self._rtdb_update("trade_signals/latest_signal", {
+            "type":      action,
+            "symbol":    symbol,
+            "name":      data.get("name", symbol),
+            "price":     data.get("price", 0),
+            "reason":    data.get("reason", ""),
+            "timestamp": ts,
+        })
 
         return True
