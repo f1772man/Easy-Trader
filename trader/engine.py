@@ -27,6 +27,7 @@ from trader.kis_auth import auth
 from trader.strategy import get_strategy_signal, DEFAULT_CONFIG
 from trader.telegram import notify_buy, notify_sell, notify_error
 from trader.firebase import FirebaseClient
+from trader.domestic_stock_functions import chk_holiday
 from google.cloud import firestore
 
 logger = logging.getLogger(__name__)
@@ -136,9 +137,9 @@ class TradingEngine:
         send_telegram("🚀 EASY TRADER 엔진 시작\nmode=prod | Firebase 연결 완료")
 
         self._restore_positions()
-        self._reload_watch_symbols()
 
         self._cache_date = datetime.now(KST).strftime("%Y%m%d")
+        self._reload_watch_symbols()
         self._warmup_market_data()
 
         self._collector = WsTickCollector(list(self._watch_symbols))
@@ -244,9 +245,23 @@ class TradingEngine:
         hm = now.hour * 100 + now.minute
         today_str = now.strftime("%Y%m%d")
         if 850 <= hm < 900 and self._premarket_warmup_done_date != today_str:
+            try:
+                df = chk_holiday(bass_dt=today_str)
+                opnd_yn = "Y"
+                if df is not None and not df.empty and "opnd_yn" in df.columns:
+                    row = df[df["bass_dt"] == today_str] if "bass_dt" in df.columns else df.iloc[:1]
+                    opnd_yn = str(row["opnd_yn"].iloc[0]).strip().upper() if not row.empty else "Y"
+            except Exception as e:
+                logger.warning(f"[장전워밍업] 휴장일 조회 실패({e}) → 개장으로 간주")
+                opnd_yn = "Y"
+
+            if opnd_yn != "Y":
+                logger.info(f"[장전워밍업] {today_str} 휴장일 → 스킵")
+                self._premarket_warmup_done_date = today_str
+                return
+
             logger.info("[장전워밍업] 전일 snapshot + strategy cache 사전 로드")
             success = self._warmup_market_data()
-            # 전체 성공 시에만 완료 표시 → 실패 시 다음 틱에서 재시도
             if success:
                 self._premarket_warmup_done_date = today_str
             else:
