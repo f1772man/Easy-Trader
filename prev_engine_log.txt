@@ -1,0 +1,5 @@
+unknown flag: --previous
+
+Usage:  docker logs [OPTIONS] CONTAINER
+
+Run 'docker logs --help' for more information

@@ -91,6 +91,7 @@ RETRYABLE_CODES = {
     "EGW00002",
     "EGW00301",
     "EGW00302",
+    "500",
 }
 
 CONFIG_ERROR_CODES = {
@@ -318,17 +319,56 @@ def _url_fetch(api_url, ptr_id, tr_cont, params, appendHeaders=None, postFlag=Fa
     def request(headers):
         if postFlag:
             return requests.post(url, headers=headers, data=json.dumps(params), timeout=10)
-        return requests.get(url, headers=headers, params=params, timeout=10)
+        return requests.get(url, headers=headers, params=params, timeout=15)
 
     # 1차 요청
     headers = _make_headers(ptr_id, tr_cont, appendHeaders)
 
-    try:
-        raw = request(headers)
-        res = APIResp(raw) if raw.status_code == 200 else APIRespError(raw.status_code, raw.text)
-    except Exception as e:
-        logger.exception(f"[KIS 요청 예외] url={url} error={e}")
-        return APIRespError(500, str(e))
+    from requests.exceptions import ReadTimeout, ConnectionError as ReqConnectionError
+
+    MAX_RETRY = 3
+
+    for attempt in range(1, MAX_RETRY + 1):
+        try:
+            raw = request(headers)
+            res = APIResp(raw) if raw.status_code == 200 else APIRespError(raw.status_code, raw.text)
+
+            if res.isOK():
+                return res
+
+            code = str(res.getErrorCode())
+            msg = res.getErrorMessage()
+
+            logger.warning(
+                f"[KIS 실패] ptr_id={ptr_id} code={code} msg={msg} "
+                f"status={res.getResCode()} attempt={attempt}/{MAX_RETRY}"
+            )
+
+            # 서버 5xx → 재시도
+            if raw.status_code >= 500 and attempt < MAX_RETRY:
+                sleep_sec = 0.4 * attempt
+                logger.warning(f"[KIS 5xx 재시도] sleep={sleep_sec}s")
+                time.sleep(sleep_sec)
+                continue
+
+            break
+
+        except (ReadTimeout, ReqConnectionError) as e:
+            logger.warning(
+                f"[KIS timeout 재시도] ptr_id={ptr_id} attempt={attempt}/{MAX_RETRY} error={e}"
+            )
+
+            if attempt < MAX_RETRY:
+                sleep_sec = 0.5 * attempt
+                time.sleep(sleep_sec)
+                continue
+
+            logger.exception(f"[KIS 최종 실패] url={url} error={e}")
+            return APIRespError(500, str(e))
+
+        except Exception as e:
+            logger.exception(f"[KIS 요청 예외] url={url} error={e}")
+            return APIRespError(500, str(e))
 
     if res.isOK():
         return res

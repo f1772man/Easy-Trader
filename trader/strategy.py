@@ -332,6 +332,10 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # 매수 조건 (우선순위 순)
         # ════════════════════════════════════════════════
 
+        # ── 공통 가드: 현재가가 EMA20 위에 있어야 매수 가능 ──
+        if close <= ema20_curr:
+            return {"signal": None, "reason": "", "energy": energy}
+
         # ──────────────────────────────────────────────
         # [조건0-A] VCP 최우선: 일봉 VCP돌파 고점수 + 5분봉 Pivot 돌파
         # ──────────────────────────────────────────────
@@ -458,7 +462,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         # [조건5] 1분봉 지속 상승
         # ──────────────────────────────────────────────
-        if is_ma_bull and is_steady_up:
+        if is_ma_bull and is_steady_up and close > ema20_curr:
             return {"signal": "BUY", "reason": "1분봉지속상승", "energy": energy}
 
         # ──────────────────────────────────────────────

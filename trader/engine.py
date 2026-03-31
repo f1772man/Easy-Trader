@@ -106,6 +106,8 @@ class TradingEngine:
         self._last_flush_date = ""
         self._last_market_scan_key = ""
         self._premarket_warmup_done_date = ""
+        self._holiday_checked_date: str = ""
+        self._today_opnd_yn: str = "Y"
 
         # 주문 중복 방지
         self._order_lock = threading.RLock()
@@ -115,9 +117,13 @@ class TradingEngine:
 
         # 재매수 방지: 당일 익절 종목 + 매도 시각
         self._today_sold: dict[str, float] = {}   # symbol → 매도 완료 timestamp
+        self._today_sold_lock = threading.Lock()  # ✅ race condition 방지
         self._reenter_cooldown_sec: float = float(
             os.environ.get("REENTER_COOLDOWN_SECONDS", "60").split("#")[0].strip()
         )  # 기본 1분 쿨다운
+
+        # Firestore 클라이언트 (공유 싱글턴 — 매 호출마다 신규 생성 방지)
+        self._fs = firestore.Client()
 
     # ── 종목명(코드) ──────────────────────────────────
     def _display_name(self, symbol: str) -> str:
@@ -244,7 +250,12 @@ class TradingEngine:
     def _maybe_premarket_warmup(self, now: datetime):
         hm = now.hour * 100 + now.minute
         today_str = now.strftime("%Y%m%d")
-        if 850 <= hm < 900 and self._premarket_warmup_done_date != today_str:
+
+        if not (850 <= hm < 900):
+            return
+
+        # 1. 휴장일 체크는 하루 1번만
+        if self._holiday_checked_date != today_str:
             try:
                 df = chk_holiday(bass_dt=today_str)
                 opnd_yn = "Y"
@@ -254,12 +265,16 @@ class TradingEngine:
             except Exception as e:
                 logger.warning(f"[장전워밍업] 휴장일 조회 실패({e}) → 개장으로 간주")
                 opnd_yn = "Y"
+            self._today_opnd_yn = opnd_yn
+            self._holiday_checked_date = today_str
 
-            if opnd_yn != "Y":
-                logger.info(f"[장전워밍업] {today_str} 휴장일 → 스킵")
-                self._premarket_warmup_done_date = today_str
-                return
+        if self._today_opnd_yn != "Y":
+            logger.info(f"[장전워밍업] {today_str} 휴장일 → 스킵")
+            self._premarket_warmup_done_date = today_str
+            return
 
+        # 2. 워밍업만 재시도
+        if self._premarket_warmup_done_date != today_str:
             logger.info("[장전워밍업] 전일 snapshot + strategy cache 사전 로드")
             success = self._warmup_market_data()
             if success:
@@ -481,8 +496,7 @@ class TradingEngine:
     # ── strategy_results 캐시 ─────────────────────────
     def _load_strategy_result(self, symbol: str) -> dict:
         try:
-            fs = firestore.Client()
-            doc = fs.collection("strategy_results").document(symbol).get()
+            doc = self._fs.collection("strategy_results").document(symbol).get()  # ✅ 공유 클라이언트
 
             if not doc.exists:
                 return {
@@ -522,7 +536,8 @@ class TradingEngine:
     # ── 재매수 방지 ─────────────────────────────────────
     def _can_reenter(self, symbol: str) -> bool:
         """당일 익절 종목 재매수 쿨다운 체크. True = 재매수 허용."""
-        sold_ts = self._today_sold.get(symbol)
+        with self._today_sold_lock:  # ✅ ThreadPoolExecutor race condition 방지
+            sold_ts = self._today_sold.get(symbol)
         if sold_ts is None:
             return True
         elapsed = time.time() - sold_ts
@@ -614,7 +629,8 @@ class TradingEngine:
         if result is not None:
             with self._positions_lock:
                 self._positions.pop(symbol, None)
-            self._today_sold[symbol] = time.time()   # ✅ 재매수 방지: 매도 시각 기록
+            with self._today_sold_lock:  # ✅ race condition 방지
+                self._today_sold[symbol] = time.time()   # 재매수 방지: 매도 시각 기록
             self.firebase.delete_trade_state(symbol)
             self.firebase.log_trade(
                 "SELL",
@@ -635,8 +651,7 @@ class TradingEngine:
     # ── 감시 목록 로드 ────────────────────────────────
     def _load_target_symbols_with_meta(self) -> tuple[list[str], dict]:
         try:
-            fs = firestore.Client()
-            docs = fs.collection("target_stocks").stream()
+            docs = self._fs.collection("target_stocks").stream()  # ✅ 공유 클라이언트
             items, meta = [], {}
             for doc in docs:
                 data = doc.to_dict()
