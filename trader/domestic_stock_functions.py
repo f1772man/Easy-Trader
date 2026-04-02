@@ -453,7 +453,7 @@ def chk_holiday(
     if bass_dt == "":
         raise ValueError("bass_dt is required (e.g. 'YYYYMMDD')")
 
-    if depth > max_depth:
+    if depth >= max_depth:
         logging.warning("Max recursive depth reached.")
         if dataframe is None:
             return pd.DataFrame()

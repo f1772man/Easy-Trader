@@ -345,7 +345,7 @@ def _url_fetch(api_url, ptr_id, tr_cont, params, appendHeaders=None, postFlag=Fa
             )
 
             # 서버 5xx → 재시도
-            if raw.status_code >= 500 and attempt < MAX_RETRY:
+            if raw.status_code >= 500 and attempt < MAX_RETRY and code not in REAUTH_ERROR_CODES:
                 sleep_sec = 0.4 * attempt
                 logger.warning(f"[KIS 5xx 재시도] sleep={sleep_sec}s")
                 time.sleep(sleep_sec)

@@ -225,6 +225,7 @@ class TradingEngine:
             self._last_order_keys.clear()
             self._last_order_ts.clear()
 
+        self.firebase.cleanup_sold_positions()
         self._today_sold.clear()
 
         logger.info(f"[캐시] 날짜 변경 → snapshot/strategy/버퍼/주문가드/재매수방지 초기화 ({today_str})")
@@ -257,7 +258,7 @@ class TradingEngine:
         # 1. 휴장일 체크는 하루 1번만
         if self._holiday_checked_date != today_str:
             try:
-                df = chk_holiday(bass_dt=today_str)
+                df = chk_holiday(bass_dt=today_str, max_depth=1)
                 opnd_yn = "Y"
                 if df is not None and not df.empty and "opnd_yn" in df.columns:
                     row = df[df["bass_dt"] == today_str] if "bass_dt" in df.columns else df.iloc[:1]
@@ -399,6 +400,7 @@ class TradingEngine:
             "ema20_prev": ema20_prev,
             "prevDayHigh": prev_day_high,
             "prevDayVolume": prev_day_volume,
+            "prevDayClose": prev_day_close,
             "pivotR2": pivot_r2,
             "data1Min": self._get_today_1min(symbol),
             "dailyVcpScore": daily_vcp_score,
@@ -607,11 +609,19 @@ class TradingEngine:
                 "energy_score": energy.get("score", 0),
                 "name": display,
                 "entry_time": datetime.now(KST).strftime("%Y%m%d_%H%M%S"),  # ✅ 매수 시각 기록 (초 단위)
+                "is_holding": True,
             }
             with self._positions_lock:
                 self._positions[symbol] = pos
             self.firebase.save_trade_state(symbol, pos)
-            self.firebase.log_trade("BUY", symbol, {"price": price, "qty": qty, "reason": reason, "name": display})
+            self.firebase.log_trade("BUY", symbol, {
+                "price":      price,
+                "qty":        qty,
+                "reason":     reason,
+                "name":       display,
+                "entry_price": price,
+                "entry_time":  pos["entry_time"],
+            })
             notify_buy(display, symbol, price, reason, energy.get("score", 0))
             return True
 
@@ -636,11 +646,13 @@ class TradingEngine:
                 "SELL",
                 symbol,
                 {
-                    "price": price,
-                    "qty": qty,
-                    "reason": reason,
-                    "profit_pct": round(profit_pct, 2),
-                    "name": display,
+                    "price":       price,
+                    "qty":         qty,
+                    "reason":      reason,
+                    "profit_pct":  round(profit_pct, 2),
+                    "name":        display,
+                    "entry_price": entry_price,
+                    "entry_time":  pos.get("entry_time", ""),
                 },
             )
             notify_sell(display, symbol, price, reason, profit_pct)
@@ -910,12 +922,19 @@ class TradingEngine:
     # ── 포지션 복원 ───────────────────────────────────
     def _restore_positions(self):
         positions = self.firebase.get_all_positions()
+        today_sold = self.firebase.get_sold_positions()  # is_holding=False 별도 조회 필요
         with self._positions_lock:
             for p in positions:
                 sym = p.pop("symbol", None)
-                if sym:
+                if sym and p.get("entry_price", 0) > 0:
                     self._positions[sym] = p
-        logger.info(f"포지션 복원: {len(self._positions)}개")
+                else:
+                    logger.warning(f"[포지션복원] {sym} entry_price 없음 → 복원 스킵")
+        for p in today_sold:
+            sym = p.get("symbol")
+            if sym:
+                self._today_sold[sym] = time.time()
+        logger.info(f"포지션 복원: {len(self._positions)}개 | 당일매도: {len(self._today_sold)}개")
 
     def get_status(self) -> dict:
         with self._positions_lock:

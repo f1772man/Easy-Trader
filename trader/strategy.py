@@ -168,6 +168,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
     prev_day_high         = params.get("prevDayHigh", 0) or 0
     pivot_r2              = params.get("pivotR2", 0) or 0
     prev_day_volume       = params.get("prevDayVolume", 0) or 0
+    prev_day_close        = params.get("prevDayClose", 0) or 0
     data_1min             = params.get("data1Min")
     # VCP 파라미터 — Firestore strategy_results 에서 읽어서 주입, 없으면 기본값
     daily_vcp_score       = int(params.get("dailyVcpScore", 0) or 0)
@@ -256,7 +257,10 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         is_ma_bull       = ma5_curr > ma20_curr
 
         swing_high        = _find_last_swing_high(data, i - 1, pi["high"])
-        is_swing_breakout = close > swing_high
+        if swing_high is None:
+            is_swing_breakout = False
+        else:
+            is_swing_breakout = close > swing_high
 
         is_pivot_r2_breakout = close > pivot_r2
         is_bull_candle       = close > open_
@@ -462,7 +466,14 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         # [조건5] 1분봉 지속 상승
         # ──────────────────────────────────────────────
-        if is_ma_bull and is_steady_up and close > ema20_curr:
+        if (
+            is_ma_bull
+            and is_steady_up
+            and ma5_up1
+            and ma5_slope_ok
+            and price_above_ma5
+            and volume > avg_vol * 1.2
+        ):
             return {"signal": "BUY", "reason": "1분봉지속상승", "energy": energy}
 
         # ──────────────────────────────────────────────
@@ -499,6 +510,23 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         current_profit    = (close / entry_price - 1) * 100 if entry_price else 0
         max_profit_so_far = (max_price_after_entry / entry_price - 1) * 100 if entry_price else 0
+
+        # ──────────────────────────────────────────────
+        # [A-0] 상한가 근접 매도 (29%)
+        # ──────────────────────────────────────────────
+        prev_close = params.get("prevDayClose", 0) or close
+        limit_up_price = prev_close * 1.29
+
+        if high >= limit_up_price:
+            logger.debug(
+                f"🚀 [상한가근접매도] prev_close:{prev_close} | "
+                f"target:{limit_up_price:.2f} | high:{high}"
+            )
+            return {
+                "signal": "SELL",
+                "reason": "상한가29%",
+                "energy": energy,
+            }
 
         # ──────────────────────────────────────────────
         # [A-1] 1분봉 구간 약세 기반 빠른 청산
@@ -544,8 +572,13 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         drop_from_peak = max_profit_so_far - current_profit
         trailing_start = cfg.get("trailingStart", 3.0)
         trailing_stop  = cfg.get("trailingStop",  1.5)
+        hard_drop_limit = cfg.get("hardDropLimit", 2.5)
 
-        ema5_break = close < ema5_curr and ema5_curr < ema5_prev
+        ema5_break = (
+            close < ema5_curr      # 종가가 EMA5 아래
+            and open_ < ema5_curr  # 시가도 EMA5 아래 (시가가 위면 이탈 아님)
+            and ema5_curr < ema5_prev
+        )
 
         logger.info(
             f"[TRAIL-CHECK] entry:{entry_price} | "
@@ -562,6 +595,20 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             and ema5_break
         ):
             reason = f"트레일링+EMA5이탈(시작{trailing_start:.2f}%, 되돌림{trailing_stop:.2f}%↓)"
+            if interval_weak:
+                reason = f"1분구간+{reason}"
+            return {
+                "signal": "SELL",
+                "reason": reason,
+                "energy": energy,
+            }
+
+        # 추가: EMA5 무관 하드컷
+        if (
+            max_profit_so_far >= trailing_start
+            and drop_from_peak >= hard_drop_limit
+        ):
+            reason = f"트레일링강제(되돌림{drop_from_peak:.2f}%↓, 한계{hard_drop_limit:.2f}%)"
             if interval_weak:
                 reason = f"1분구간+{reason}"
             return {
@@ -731,4 +778,4 @@ def _find_last_swing_high(data: list, i: int, high_idx: int) -> float:
                 and h > data[k + 1][high_idx]
                 and h > data[k + 2][high_idx]):
             return h
-    return -math.inf
+    return None

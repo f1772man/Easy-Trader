@@ -122,21 +122,13 @@ class FirebaseClient:
 
     # ── 포지션 관리 (Firestore) ───────────────────────
     def save_trade_state(self, symbol: str, state: dict) -> bool:
-        """Firestore positions/{symbol}"""
+        """Firestore positions/{symbol} — pos dict 그대로 저장"""
         if not self._fs:
             return False
-        now = datetime.now(KST)
         try:
-            self._fs.collection("positions").document(symbol).set({
-                "symbol":        symbol,
-                "is_holding":    True,
-                "avg_buy_price": state.get("entry_price", 0),
-                "quantity":      state.get("qty", 0),
-                "reason":        state.get("reason", ""),
-                "energy_score":  state.get("energy_score", 0),
-                "name":          state.get("name", symbol),
-                "updated_at":    now.strftime("%Y-%m-%d %H:%M:%S"),
-            })
+            doc = {"symbol": symbol}
+            doc.update(state)
+            self._fs.collection("positions").document(symbol).set(doc)
             return True
         except Exception as e:
             logger.error(f"save_trade_state 실패: {e}")
@@ -171,26 +163,57 @@ class FirebaseClient:
             logger.error(f"delete_trade_state 실패: {e}")
             return False
 
-    def get_all_positions(self) -> list:
-        """is_holding=True인 전체 포지션 반환 (재시작 시 복원용)"""
+    # 위치: delete_trade_state() 바로 아래 추가
+    def cleanup_sold_positions(self) -> bool:
+        """is_holding=False 문서 전체 삭제 (날짜 변경 시 호출)"""
+        if not self._fs:
+            return False
+        try:
+            docs = self._fs.collection("positions").where(
+                filter=FieldFilter("is_holding", "==", False)
+            ).stream()
+            for doc in docs:
+                doc.reference.delete()
+            logger.info("[포지션정리] is_holding=False 문서 삭제 완료")
+            return True
+        except Exception as e:
+            logger.error(f"cleanup_sold_positions 실패: {e}")
+            return False
+    
+    def get_sold_positions(self) -> list:
+        """is_holding=False 종목 반환 (재시작 시 당일매도 복원용)"""
         if not self._fs:
             return []
         try:
-            # 'filter' 키워드와 'FieldFilter'를 사용하도록 수정
             docs = self._fs.collection("positions").where(
-                filter=FieldFilter("is_holding", "==", True)
+                filter=FieldFilter("is_holding", "==", False)
             ).stream()
             result = []
             for doc in docs:
                 data = doc.to_dict() or {}
-                result.append({
-                    "symbol":       data.get("symbol", doc.id),
-                    "entry_price":  data.get("avg_buy_price", 0),
-                    "max_price":    data.get("avg_buy_price", 0),
-                    "qty":          data.get("quantity", 0),
-                    "reason":       data.get("reason", ""),
-                    "energy_score": data.get("energy_score", 0),
-                })
+                sym = data.get("symbol", doc.id)
+                result.append({"symbol": sym})
+            logger.info(f"[당일매도복원] {len(result)}개")
+            return result
+        except Exception as e:
+            logger.error(f"get_sold_positions 실패: {e}")
+            return []
+
+    def get_all_positions(self) -> list:
+        """positions 전체 반환 (재시작 시 복원용)"""
+        if not self._fs:
+            return []
+        try:
+            docs = self._fs.collection("positions").stream()
+            result = []
+            for doc in docs:
+                data = doc.to_dict() or {}
+                if not data.get("is_holding"):
+                    continue
+                sym = data.get("symbol", doc.id)
+                entry = {"symbol": sym}
+                entry.update({k: v for k, v in data.items() if k != "symbol"})
+                result.append(entry)
             logger.info(f"[포지션복원] {len(result)}개")
             return result
         except Exception as e:
@@ -218,8 +241,13 @@ class FirebaseClient:
             "date":       now.strftime("%Y-%m-%d"),
             "time":       now.strftime("%H:%M:%S"),
         }
+        if action == "BUY":
+            entry["entry_price"] = data.get("entry_price", 0)
+            entry["entry_time"]  = data.get("entry_time", "")
         if action == "SELL":
-            entry["profit_pct"] = data.get("profit_pct", 0)
+            entry["profit_pct"]  = data.get("profit_pct", 0)
+            entry["entry_price"] = data.get("entry_price", 0)
+            entry["entry_time"]  = data.get("entry_time", "")
 
         # Firestore에 영구 저장
         if self._fs:
