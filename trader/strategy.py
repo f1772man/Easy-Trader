@@ -161,6 +161,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
     ma5_prev              = params["ma5_prev"]
     ma20_prev             = params["ma20_prev"]
     ma5_prev2             = params.get("ma5_prev2")
+    ema5_prev2            = params.get("ema5_prev2")
     ema5_curr             = params["ema5_curr"]
     ema20_curr            = params["ema20_curr"]
     ema5_prev             = params["ema5_prev"]
@@ -227,6 +228,11 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         if hm_int < 900 or hm_int >= 2000:
             return {"signal": "HOLD", "reason": "장외시간", "energy": energy}
 
+        # ── 상한가 근접 매수 차단 (29%) ──────────────────
+        _prev_close_buy = params.get("prevDayClose", 0) or close
+        if _prev_close_buy > 0 and close >= _prev_close_buy * 1.29:
+            return {"signal": "HOLD", "reason": "상한가근접매수차단", "energy": energy}
+
         # ── 금요일 진입 제한 ─────────────────────────────
         is_friday = (datetime.datetime.now().weekday() == 4)
         if is_friday:
@@ -276,10 +282,18 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         is_gap_up     = gap_from_open > cfg["gapThreshold"] * 0.7
 
         ma5_up1         = ma5_curr > ma5_prev
+        
         ma5_up2         = (ma5_prev > ma5_prev2) if ma5_prev2 is not None else True
         ma5_slope_pct   = (ma5_curr - ma5_prev) / ma5_prev if ma5_prev > 0 else 0
         ma5_slope_ok    = ma5_slope_pct >= cfg.get("ma5SlopeMinPct", 0.003)
         price_above_ma5 = close > ma5_curr
+        ema5_up1 = ema5_curr > ema5_prev
+        is_ema5_falling = (
+            not ema5_up1
+            or (ema5_prev2 is not None and ema5_prev < ema5_prev2)
+        )
+        ema5_5bars_ago  = params.get("ema5_5bars_ago")
+        ema5_slope_ok   = (ema5_5bars_ago is not None and ema5_curr > ema5_5bars_ago)
 
         is_steady_up = (
             _check_steady_rising(
@@ -293,7 +307,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             energy["score"] >= 60
             and energy["isBreakout"]
             and is_vol_explosion
-        )
+        )        
 
         # ── GC 판별 ──────────────────────────────────────
         gc_cfg        = cfg.get("gcBreakout", {})
@@ -388,11 +402,16 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         # ──────────────────────────────────────────────
         # [조건1] GC + 전고점 돌파
-        # ──────────────────────────────────────────────
+        # ──────────────────────────────────────────────        
         if has_recent_golden_cross and is_within_gc_window and is_swing_breakout:
+            if not (ema5_curr > ema20_curr and close > ema5_curr and ema5_slope_ok):
+                logger.debug(
+                    f"⛔ [GC전고차단] EMA 미정렬 | "
+                    f"ema5:{ema5_curr:.0f} | ema20:{ema20_curr:.0f} | close:{close:.0f}"
+                )
+                return {"signal": "HOLD", "reason": "GC전고돌파-EMA미정렬", "energy": energy}
             tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
             return {"signal": "BUY", "reason": f"GC+전고돌파{tag}", "energy": energy}
-
         # ──────────────────────────────────────────────
         # [조건1-B] GC + 거래량 급증
         # ──────────────────────────────────────────────
@@ -438,18 +457,15 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # [조건3] 장 초반 피봇 R2 돌파
         #   MA5 하락 기울기이면 BUY 대신 HOLD
         # ──────────────────────────────────────────────
-        is_ma5_falling = (
-            not ma5_up1
-            or (ma5_prev2 is not None and ma5_prev < ma5_prev2)
-        )
+        # 변경: EMA5 기울기 판단        
 
         if is_early_morning and is_bull_candle and is_pivot_r2_breakout:
-            if is_ma5_falling:
+            if is_ema5_falling:
                 logger.debug(
-                    f"⛔ [피봇R2차단] MA5 하락 기울기 | "
-                    f"ma5_prev2:{ma5_prev2} | ma5_prev:{ma5_prev} | ma5_curr:{ma5_curr}"
+                    f"⛔ [피봇R2차단] EMA5 하락 기울기 | "
+                    f"ema5_prev2:{ema5_prev2} | ema5_prev:{ema5_prev} | ema5_curr:{ema5_curr}"
                 )
-                return {"signal": "HOLD", "reason": "피봇R2차단(MA5하락)", "energy": energy}
+                return {"signal": "HOLD", "reason": "피봇R2차단(EMA5하락)", "energy": energy}
             return {"signal": "BUY", "reason": "피봇R2돌파", "energy": energy}
 
         # ──────────────────────────────────────────────
@@ -508,23 +524,38 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             else False
         )
 
-        current_profit    = (close / entry_price - 1) * 100 if entry_price else 0
+        # 1분봉 마지막 close를 현재가로 우선 사용 (5분봉보다 실시간성 높음)
+        last_1m_close = data_1min[-1][PriceIndex.CLOSE] if data_1min else None
+        current_price = last_1m_close if last_1m_close else close
+        current_profit    = (current_price / entry_price - 1) * 100 if entry_price else 0
         max_profit_so_far = (max_price_after_entry / entry_price - 1) * 100 if entry_price else 0
 
         # ──────────────────────────────────────────────
-        # [A-0] 상한가 근접 매도 (29%)
+        # [A-0] 상한가 터치 후 이탈 매도
         # ──────────────────────────────────────────────
         prev_close = params.get("prevDayClose", 0) or close
         limit_up_price = prev_close * 1.29
+        touched_limit_up = params.get("touchedLimitUp", False)
 
-        if high >= limit_up_price:
+        if touched_limit_up and high < limit_up_price:
             logger.debug(
-                f"🚀 [상한가근접매도] prev_close:{prev_close} | "
+                f"🚀 [상한가이탈매도] prev_close:{prev_close} | "
                 f"target:{limit_up_price:.2f} | high:{high}"
             )
             return {
                 "signal": "SELL",
-                "reason": "상한가29%",
+                "reason": "상한가이탈",
+                "energy": energy,
+            }
+
+        if high >= limit_up_price:
+            logger.debug(
+                f"🚀 [상한가터치-대기] prev_close:{prev_close} | "
+                f"target:{limit_up_price:.2f} | high:{high}"
+            )
+            return {
+                "signal": "HOLD",
+                "reason": "상한가터치-대기",
                 "energy": energy,
             }
 
@@ -554,17 +585,10 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             else cfg.get("stopLoss", 2.0)
         )
         if current_profit <= -effective_stop_pct:
-            base_reason = (
-                f"VCP손절({daily_stop_loss})"
-                if daily_stop_loss > 0
-                else f"손절({cfg.get('stopLoss', 2.0)}%)"
-            )
-            reason = f"1분구간+{base_reason}" if interval_weak else base_reason
             logger.debug(
-                f"🛑 [손절] {reason} | 현재수익:{current_profit:.2f}% | 기준:-{effective_stop_pct:.2f}% | "
-                f"1분구간약세:{interval_weak} | 구간봉수:{len(interval_1m)}"
-            )
-            return {"signal": "SELL", "reason": reason, "energy": energy}
+                f"🛑 [손절대기] 현재수익:{current_profit:.2f}% | 기준:-{effective_stop_pct:.2f}% → engine에서 다음 1분봉 확인"
+            )            
+            return {"signal": "SELL", "reason": "손절대기", "energy": energy}
         
         # ──────────────────────────────────────────────
         # [B] 트레일링 스탑

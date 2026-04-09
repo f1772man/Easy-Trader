@@ -27,7 +27,6 @@ from trader.kis_auth import auth
 from trader.strategy import get_strategy_signal, DEFAULT_CONFIG
 from trader.telegram import notify_buy, notify_sell, notify_error
 from trader.firebase import FirebaseClient
-from trader.domestic_stock_functions import chk_holiday
 from google.cloud import firestore
 
 logger = logging.getLogger(__name__)
@@ -65,6 +64,15 @@ def _to_df(candles: list) -> pd.DataFrame:
     for col in ["open", "high", "low", "close", "volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     return df.reset_index(drop=True)
+
+def _normalize_name(name: str, symbol: str) -> str:
+    """'종목명(코드)' 형태로 저장된 기존 데이터를 '종목명'으로 정규화"""
+    if not name:
+        return ""
+    suffix = f"({symbol})"
+    if name.endswith(suffix):
+        return name[:-len(suffix)]
+    return name
 
 
 class TradingEngine:
@@ -122,13 +130,19 @@ class TradingEngine:
             os.environ.get("REENTER_COOLDOWN_SECONDS", "60").split("#")[0].strip()
         )  # 기본 1분 쿨다운
 
+        # 상한가 터치 여부 (symbol → bool)
+        self._touched_limit_up: dict[str, bool] = {}
+
+        # 손절 대기 (symbol → 진입 시 마지막 1분봉 time_key)
+        self._stop_loss_pending: dict[str, str] = {}  # ← 추가
+
         # Firestore 클라이언트 (공유 싱글턴 — 매 호출마다 신규 생성 방지)
         self._fs = firestore.Client()
 
     # ── 종목명(코드) ──────────────────────────────────
     def _display_name(self, symbol: str) -> str:
         name = self._symbol_meta.get(symbol, {}).get("name", "")
-        return f"{name}({symbol})" if name else symbol
+        return f"{_normalize_name(name, symbol)}({symbol})" if name else symbol
 
     # ── 메인 루프 ─────────────────────────────────────
     def run(self):
@@ -227,9 +241,10 @@ class TradingEngine:
 
         self.firebase.cleanup_sold_positions()
         self._today_sold.clear()
+        self._touched_limit_up.clear()
+        self._stop_loss_pending.clear()
 
         logger.info(f"[캐시] 날짜 변경 → snapshot/strategy/버퍼/주문가드/재매수방지 초기화 ({today_str})")
-        self._reload_watch_symbols()
         if self._collector:
             self._collector.reset_day()
 
@@ -248,6 +263,34 @@ class TradingEngine:
         })
         self._last_heartbeat_ts = ts
 
+    def _fetch_holiday_once(self, today_str: str) -> str:
+        """chk_holiday API 1페이지만 조회 (재귀 없음)"""
+        import trader.kis_auth as ka
+        params = {
+            "BASS_DT": today_str,
+            "CTX_AREA_FK": "",
+            "CTX_AREA_NK": ""
+        }
+        res = ka._url_fetch(
+            "/uapi/domestic-stock/v1/quotations/chk-holiday",
+            "CTCA0903R", "", params
+        )
+        if not res.isOK():
+            logger.warning("[휴장일조회] API 실패 → 개장으로 간주")
+            return "Y"
+        output = res.getBody().output
+        if not isinstance(output, list):
+            output = [output]
+        df = pd.DataFrame(output)
+        if df.empty or "opnd_yn" not in df.columns:
+            return "Y"
+        row = df[df["bass_dt"] == today_str] if "bass_dt" in df.columns else df.iloc[:1]
+        if row.empty:
+            return "Y"
+        opnd_yn = str(row["opnd_yn"].iloc[0]).strip().upper()
+        logger.info(f"[휴장일조회] {today_str} opnd_yn={opnd_yn}")
+        return opnd_yn
+
     def _maybe_premarket_warmup(self, now: datetime):
         hm = now.hour * 100 + now.minute
         today_str = now.strftime("%Y%m%d")
@@ -258,11 +301,7 @@ class TradingEngine:
         # 1. 휴장일 체크는 하루 1번만
         if self._holiday_checked_date != today_str:
             try:
-                df = chk_holiday(bass_dt=today_str, max_depth=1)
-                opnd_yn = "Y"
-                if df is not None and not df.empty and "opnd_yn" in df.columns:
-                    row = df[df["bass_dt"] == today_str] if "bass_dt" in df.columns else df.iloc[:1]
-                    opnd_yn = str(row["opnd_yn"].iloc[0]).strip().upper() if not row.empty else "Y"
+                opnd_yn = self._fetch_holiday_once(today_str)
             except Exception as e:
                 logger.warning(f"[장전워밍업] 휴장일 조회 실패({e}) → 개장으로 간주")
                 opnd_yn = "Y"
@@ -276,7 +315,8 @@ class TradingEngine:
 
         # 2. 워밍업만 재시도
         if self._premarket_warmup_done_date != today_str:
-            logger.info("[장전워밍업] 전일 snapshot + strategy cache 사전 로드")
+            logger.info("[장전워밍업] 감시 종목 갱신 후 전일 snapshot + strategy cache 사전 로드")
+            self._reload_watch_symbols()
             success = self._warmup_market_data()
             if success:
                 self._premarket_warmup_done_date = today_str
@@ -300,11 +340,17 @@ class TradingEngine:
     def _process_symbol(self, symbol: str, now: datetime):
         display = self._display_name(symbol)
 
+        # lock 밖에서 미리 수집
+        ws_1min = self._collector.get_1min(symbol) if self._collector else []
         today_5m = self._get_today_5min_for_strategy(symbol, now, include_partial=INCLUDE_PARTIAL_5MIN)
         completed_5m = self._collector.get_5min(symbol) if self._collector else []
 
+        if not ws_1min and not completed_5m:
+            logger.debug(f"[{display}] 첫 체결 전 → 대기")
+            return
+            
         if not today_5m:
-            logger.debug(f"[{display}] 당일 5분봉 없음 → 대기")
+            logger.warning(f"[{display}] 5분봉 없음 | 1분봉={len(ws_1min)} | 완성5분봉={len(completed_5m)}")
             return
 
         prev_snapshot = self._get_prev_snapshot(symbol)
@@ -344,6 +390,8 @@ class TradingEngine:
         ema5_curr  = _ema_at(df, 5,  i)
         ema20_curr = _ema_at(df, 20, i)
         ema5_prev  = _ema_at(df, 5,  i - 1)
+        ema5_prev2 = _ema_at(df, 5,  i - 2) if i >= 2 else None
+        ema5_5bars_ago = _ema_at(df, 5,  i - 5) if i >= 5 else None
         ema20_prev = _ema_at(df, 20, i - 1)
 
         if None in (
@@ -351,10 +399,7 @@ class TradingEngine:
             ema5_curr, ema20_curr, ema5_prev, ema20_prev
         ):            
             logger.debug(f"[{display}] MA None → 스킵")
-            return
-
-        # lock 밖에서 미리 수집
-        ws_1min = self._collector.get_1min(symbol) if self._collector else []
+            return        
 
         # lock 안에서 pos 읽기 + max_price 계산까지 한번에
         with self._positions_lock:
@@ -398,15 +443,18 @@ class TradingEngine:
             "ema20_curr": ema20_curr,
             "ema5_prev": ema5_prev,
             "ema20_prev": ema20_prev,
+            "ema5_prev2": ema5_prev2,
+            "ema5_5bars_ago": ema5_5bars_ago,
             "prevDayHigh": prev_day_high,
             "prevDayVolume": prev_day_volume,
             "prevDayClose": prev_day_close,
             "pivotR2": pivot_r2,
-            "data1Min": self._get_today_1min(symbol),
+            "data1Min": ws_1min,
             "dailyVcpScore": daily_vcp_score,
             "dailyStrategy": daily_strategy,
             "dailyPivotPoint": daily_pivot_point,
             "dailyStopLoss": daily_stop_loss,
+            "touchedLimitUp": self._touched_limit_up.get(symbol, False),
         })
 
         signal = result["signal"]
@@ -423,23 +471,65 @@ class TradingEngine:
 
         bar_time = str(df["time"].iloc[i])
 
+        # strategy 호출 전 수집한 ws_1min 재사용 (시점 통일)
+        last_1m_close = ws_1min[-1][4] if ws_1min else None
+        current_price = int(last_1m_close) if last_1m_close else int(close)
+
         if signal == "BUY" and not is_holding:
             if not self._can_reenter(symbol):
                 logger.info(f"[재매수방지] {display} → 쿨다운 중, 스킵")
             elif self._can_place_order(symbol, "BUY", bar_time):
                 executed = False
                 try:
-                    executed = self._execute_buy(symbol, close, reason, energy)
+                    executed = self._execute_buy(symbol, current_price, reason, energy)
                 finally:
                     self._finalize_order(symbol, "BUY", bar_time, executed)
 
         elif signal == "SELL" and is_holding:
-            if self._can_place_order(symbol, "SELL", bar_time):
-                executed = False
-                try:
-                    executed = self._execute_sell(symbol, close, reason, entry_price)
-                finally:
-                    self._finalize_order(symbol, "SELL", bar_time, executed)
+            if reason == "손절대기":
+                pending_bar = self._stop_loss_pending.get(symbol)
+                last_bar_key = ws_1min[-1][0] if ws_1min else None
+
+                if pending_bar is None:
+                    self._stop_loss_pending[symbol] = last_bar_key
+                    logger.info(f"[손절대기] {display} | 봉={last_bar_key} → 다음 1분봉 종가 확인 예정")
+                elif last_bar_key != pending_bar:
+                    last_close = ws_1min[-1][4] if ws_1min else current_price
+                    pending_profit = (last_close / entry_price - 1) * 100 if entry_price else 0
+                    daily_stop_loss = float(self._get_strategy_cached(symbol).get("dailyStopLoss") or 0)
+                    stop_pct = (
+                        abs(daily_stop_loss / entry_price - 1) * 100
+                        if daily_stop_loss > 0 and entry_price > 0
+                        else self.cfg.get("stopLoss", 2.0)
+                    )
+                    if pending_profit <= -stop_pct:
+                        logger.info(f"[손절확정] {display} | 종가:{last_close} | 수익:{pending_profit:.2f}%")
+                        if self._can_place_order(symbol, "SELL", last_bar_key):
+                            executed = False
+                            try:
+                                executed = self._execute_sell(symbol, last_close, reason, entry_price)
+                            finally:
+                                self._finalize_order(symbol, "SELL", last_bar_key, executed)
+                                if executed:
+                                    self._stop_loss_pending.pop(symbol, None)
+                                    self._touched_limit_up.pop(symbol, None)
+                    else:
+                        logger.info(f"[손절취소] {display} | 종가:{last_close} | 수익:{pending_profit:.2f}% 회복")
+                        self._stop_loss_pending.pop(symbol, None)
+            else:
+                if self._can_place_order(symbol, "SELL", bar_time):
+                    executed = False
+                    try:
+                        executed = self._execute_sell(symbol, current_price, reason, entry_price)
+                    finally:
+                        self._finalize_order(symbol, "SELL", bar_time, executed)
+                        if executed:
+                            self._stop_loss_pending.pop(symbol, None)
+                            self._touched_limit_up.pop(symbol, None)
+
+        elif reason == "상한가터치-대기":
+            self._touched_limit_up[symbol] = True
+            logger.info(f"[상한가터치] {display} → 다음 봉 이탈 시 매도 대기")
 
     # ── 현재 당일 1분봉/5분봉 보조 ─────────────────────
     def _get_today_1min(self, symbol: str) -> list:
@@ -594,7 +684,9 @@ class TradingEngine:
 
     # ── 매수/매도 실행 ─────────────────────────────────
     def _execute_buy(self, symbol: str, price: int, reason: str, energy: dict) -> bool:
-        display = self._display_name(symbol)
+        raw_name = self._symbol_meta.get(symbol, {}).get("name", "")
+        display = f"{raw_name}({symbol})" if raw_name else symbol
+
         budget = int(os.environ.get("MAX_POSITION_SIZE", "1000000").split("#")[0].strip())
         qty = max(1, budget // max(price, 1))
         logger.info(f"🟢 매수 실행: {display} {qty}주 @ {price}원 / {reason}")
@@ -607,7 +699,7 @@ class TradingEngine:
                 "qty": qty,
                 "reason": reason,
                 "energy_score": energy.get("score", 0),
-                "name": display,
+                "name": raw_name,  # positions: 종목명만 저장
                 "entry_time": datetime.now(KST).strftime("%Y%m%d_%H%M%S"),  # ✅ 매수 시각 기록 (초 단위)
                 "is_holding": True,
             }
@@ -615,12 +707,12 @@ class TradingEngine:
                 self._positions[symbol] = pos
             self.firebase.save_trade_state(symbol, pos)
             self.firebase.log_trade("BUY", symbol, {
-                "price":      price,
-                "qty":        qty,
-                "reason":     reason,
-                "name":       display,
+                "price": price,
+                "qty": qty,
+                "reason": reason,
+                "name": raw_name,  # trade_log: 종목명만 저장
                 "entry_price": price,
-                "entry_time":  pos["entry_time"],
+                "entry_time": pos["entry_time"],
             })
             notify_buy(display, symbol, price, reason, energy.get("score", 0))
             return True
@@ -628,9 +720,12 @@ class TradingEngine:
         return False
 
     def _execute_sell(self, symbol: str, price: int, reason: str, entry_price: float) -> bool:
-        display = self._display_name(symbol)
         with self._positions_lock:
             pos = self._positions.get(symbol, {})
+
+        raw_name = pos.get("name") or self._symbol_meta.get(symbol, {}).get("name", "")
+        display = f"{_normalize_name(raw_name, symbol)}({symbol})" if raw_name else symbol
+
         qty = pos.get("qty", 1)
         profit_pct = (price / entry_price - 1) * 100 if entry_price else 0
         logger.info(f"🔴 매도 실행: {display} {qty}주 @ {price}원 / {reason} / 수익:{profit_pct:.2f}%")
@@ -646,13 +741,13 @@ class TradingEngine:
                 "SELL",
                 symbol,
                 {
-                    "price":       price,
-                    "qty":         qty,
-                    "reason":      reason,
-                    "profit_pct":  round(profit_pct, 2),
-                    "name":        display,
+                    "price": price,
+                    "qty": qty,
+                    "reason": reason,
+                    "profit_pct": round(profit_pct, 2),
+                    "name": raw_name,  # trade_log: 종목명만 저장
                     "entry_price": entry_price,
-                    "entry_time":  pos.get("entry_time", ""),
+                    "entry_time": pos.get("entry_time", ""),
                 },
             )
             notify_sell(display, symbol, price, reason, profit_pct)
@@ -721,9 +816,21 @@ class TradingEngine:
                 self._last_order_ts.pop(sym, None)
 
         if added:
-            self._preload_symbols_data(added)
+            self._warmup_market_data()
 
-        logger.info(f"[감시목록] {len(new_symbols)}개 | 추가={added} | 제거={removed}")
+        # 복원된 포지션 종목은 target_stocks와 무관하게 감시 목록에 강제 포함
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+        force_added = [s for s in holding_symbols if s not in self._watch_symbols]
+        if force_added:
+            self._watch_symbols = list(self._watch_symbols) + force_added
+            if self._collector:
+                self._collector.update_symbols(list(self._watch_symbols))
+            logger.info(f"[감시목록] 보유 포지션 강제 편입: {force_added}")
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+                list(ex.map(self._load_symbol_data, force_added))
+
+        logger.info(f"[감시목록] {len(self._watch_symbols)}개 | 추가={added} | 제거={removed}")
 
         if not prev_symbols or added or removed:
             now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
@@ -764,46 +871,48 @@ class TradingEngine:
             self._prev_snapshot_cache[symbol] = snap
         return snap
 
-    def _preload_symbols_data(self, symbols: list[str]):
-        if not symbols:
-            return
+    def _load_symbol_data(self, sym: str) -> bool:
+        """종목 1개의 snapshot + strategy 로드 → 캐시 저장. 공통 로더."""
+        snap = None
+        strategy_data = None
+        try:
+            snap = kis_api.get_prev_day_snapshot(sym)
+        except Exception as e:
+            logger.error(f"[워밍업][snapshot] {self._display_name(sym)} ❌ {e}")
+        try:
+            strategy_data = self._load_strategy_result(sym)
+        except Exception as e:
+            logger.error(f"[워밍업][strategy] {self._display_name(sym)} ❌ {e}")
 
-        def _load(sym: str):
-            snap = None
-            strategy_data = None
-            try:
-                snap = kis_api.get_prev_day_snapshot(sym)
-            except Exception as e:
-                logger.error(f"[워밍업][snapshot] {self._display_name(sym)} ❌ {e}")
-            try:
-                strategy_data = self._load_strategy_result(sym)
-            except Exception as e:
-                logger.error(f"[워밍업][strategy] {self._display_name(sym)} ❌ {e}")
+        with self._snapshot_lock:
+            self._prev_snapshot_cache[sym] = snap
+        with self._strategy_lock:
+            self._strategy_cache[sym] = strategy_data or {
+                "dailyVcpScore": 0,
+                "dailyStrategy": "",
+                "dailyPivotPoint": 0.0,
+                "dailyStopLoss": 0.0,
+            }
 
-            with self._snapshot_lock:
-                self._prev_snapshot_cache[sym] = snap
-            with self._strategy_lock:
-                self._strategy_cache[sym] = strategy_data or {
-                    "dailyVcpScore": 0,
-                    "dailyStrategy": "",
-                    "dailyPivotPoint": 0.0,
-                    "dailyStopLoss": 0.0,
-                }
+        ok_snapshot = bool(snap)
+        ok_strategy = strategy_data is not None
+        logger.info(
+            f"[워밍업] {self._display_name(sym)} snapshot={'OK' if ok_snapshot else 'FAIL'} | strategy={'OK' if ok_strategy else 'FAIL'}"
+        )
+        return ok_snapshot and ok_strategy
 
-            ok_snapshot = bool(snap)
-            ok_strategy = strategy_data is not None
-            logger.info(
-                f"[워밍업] {self._display_name(sym)} snapshot={'OK' if ok_snapshot else 'FAIL'} | strategy={'OK' if ok_strategy else 'FAIL'}"
-            )
-            return ok_snapshot and ok_strategy
-
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-            list(ex.map(_load, symbols))
-
-    def _warmup_market_data(self):
+    def _warmup_market_data(self) -> bool:
         symbols = list(self._watch_symbols)
         if not symbols:
-            return
+            return True
+
+        # 이미 snapshot 캐시가 있는 종목은 스킵 (이중 로드 방지)
+        with self._snapshot_lock:
+            symbols = [s for s in symbols if self._prev_snapshot_cache.get(s, "__MISSING__") == "__MISSING__"]
+        if not symbols:
+            logger.info("[워밍업] 모든 종목 캐시 존재 → 스킵")
+            self._premarket_warmup_done_date = datetime.now(KST).strftime("%Y%m%d")
+            return True
 
         from trader.telegram import send_telegram
 
@@ -812,39 +921,8 @@ class TradingEngine:
             f"⏳ 장전 데이터 로드 중... ({len(symbols)}종목)\n전일 1분봉 + 전략 캐시를 준비합니다."
         )
 
-        results = []
-
-        def _load(sym: str):
-            snap = None
-            strategy_data = None
-            try:
-                snap = kis_api.get_prev_day_snapshot(sym)
-            except Exception as e:
-                logger.error(f"[워밍업][snapshot] {self._display_name(sym)} ❌ {e}")
-            try:
-                strategy_data = self._load_strategy_result(sym)
-            except Exception as e:
-                logger.error(f"[워밍업][strategy] {self._display_name(sym)} ❌ {e}")
-
-            with self._snapshot_lock:
-                self._prev_snapshot_cache[sym] = snap
-            with self._strategy_lock:
-                self._strategy_cache[sym] = strategy_data or {
-                    "dailyVcpScore": 0,
-                    "dailyStrategy": "",
-                    "dailyPivotPoint": 0.0,
-                    "dailyStopLoss": 0.0,
-                }
-
-            ok_snapshot = bool(snap)
-            ok_strategy = strategy_data is not None
-            logger.info(
-                f"[워밍업] {self._display_name(sym)} snapshot={'OK' if ok_snapshot else 'FAIL'} | strategy={'OK' if ok_strategy else 'FAIL'}"
-            )
-            return ok_snapshot and ok_strategy
-
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-            results = list(ex.map(_load, symbols))
+            results = list(ex.map(self._load_symbol_data, symbols))
 
         ok = sum(results)
         fail = len(results) - ok
@@ -923,13 +1001,19 @@ class TradingEngine:
     def _restore_positions(self):
         positions = self.firebase.get_all_positions()
         today_sold = self.firebase.get_sold_positions()  # is_holding=False 별도 조회 필요
+        restored = []  # (sym, raw_name) 튜플
         with self._positions_lock:
             for p in positions:
                 sym = p.pop("symbol", None)
                 if sym and p.get("entry_price", 0) > 0:
                     self._positions[sym] = p
+                    restored.append((sym, p.get("name", "")))
                 else:
                     logger.warning(f"[포지션복원] {sym} entry_price 없음 → 복원 스킵")
+        for sym, raw_name in restored:
+            name = _normalize_name(raw_name, sym)
+            display = f"{name}({sym})" if name else sym
+            logger.info(f"[포지션복원] {display} 복원 완료")
         for p in today_sold:
             sym = p.get("symbol")
             if sym:
