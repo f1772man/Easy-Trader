@@ -156,6 +156,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
     is_holding            = params["isHolding"]
     entry_price           = params.get("entryPrice", 0) or 0
     max_price_after_entry = params.get("maxPriceAfterEntry", 0) or 0
+    trailing_exit_price   = params.get("trailingExitPrice", 0) or 0
     ma5_curr              = params["ma5_curr"]
     ma20_curr             = params["ma20_curr"]
     ma5_prev              = params["ma5_prev"]
@@ -273,8 +274,9 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         avg_vol     = _calc_avg_vol(data, i, 20, pi["volume"])
         avg_vol_day = _calc_avg_vol(data, i, 20, pi["volume"])
+        vol_ratio = (volume / avg_vol) if avg_vol > 0 else 0.0
         is_vol_explosion = (
-            volume > avg_vol * cfg["volMultiplier"]
+            vol_ratio >= cfg["volMultiplier"]
             and volume > avg_vol_day * 0.8
         )
 
@@ -294,6 +296,18 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         )
         ema5_5bars_ago  = params.get("ema5_5bars_ago")
         ema5_slope_ok   = (ema5_5bars_ago is not None and ema5_curr > ema5_5bars_ago)
+
+        # 트레일링 청산 후 재진입 필터
+        # trailing_exit_price > 0 이면 트레일링 청산 직후 재진입 시도임
+        _trailing_reentry_max_pct = cfg.get("trailingReentryMaxPct", 1.5)
+        trailing_reentry_price_ok = (
+            trailing_exit_price <= 0
+            or close <= trailing_exit_price * (1 + _trailing_reentry_max_pct / 100)
+        )
+        trailing_reentry_ema_ok = (
+            trailing_exit_price <= 0
+            or not is_ema5_falling
+        )
 
         is_steady_up = (
             _check_steady_rising(
@@ -416,10 +430,15 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # [조건1-B] GC + 거래량 급증
         # ──────────────────────────────────────────────
         if (is_within_gc_window and is_ma_bull
-                and volume > avg_vol * 2
+                and vol_ratio >= 2
                 and ma5_up1 and is_bull_candle and price_above_ma5):
             tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
-            return {"signal": "BUY", "reason": f"GC+거래량급증{tag}", "energy": energy}
+            if not trailing_reentry_price_ok:
+                pct = (close / trailing_exit_price - 1) * 100
+                return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
+            if not trailing_reentry_ema_ok:
+                return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
+            return {"signal": "BUY", "reason": f"GC+거래량급증({vol_ratio:.1f}배){tag}", "energy": energy}
 
         # ──────────────────────────────────────────────
         # [조건2] 전일 고가 돌파
@@ -473,9 +492,14 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         if (is_ma_bull and is_vol_explosion and is_gap_up
                 and ma5_up1 and ma5_up2 and ma5_slope_ok and price_above_ma5):
+            if not trailing_reentry_price_ok:
+                pct = (close / trailing_exit_price - 1) * 100
+                return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
+            if not trailing_reentry_ema_ok:
+                return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
             return {
                 "signal": "BUY",
-                "reason": "거래량폭발+시가대비상승+MA5상승(연속)",
+                "reason": f"거래량폭발({vol_ratio:.1f}배)+시가대비상승+MA5상승(연속)",
                 "energy": energy,
             }
 
@@ -490,6 +514,11 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             and price_above_ma5
             and volume > avg_vol * 1.2
         ):
+            if not trailing_reentry_price_ok:
+                pct = (close / trailing_exit_price - 1) * 100
+                return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
+            if not trailing_reentry_ema_ok:
+                return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
             return {"signal": "BUY", "reason": "1분봉지속상승", "energy": energy}
 
         # ──────────────────────────────────────────────
@@ -501,6 +530,11 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 and energy["isBreakout"]
                 and is_vol_explosion):
             tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
+            if not trailing_reentry_price_ok:
+                pct = (close / trailing_exit_price - 1) * 100
+                return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
+            if not trailing_reentry_ema_ok:
+                return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
             return {"signal": "BUY", "reason": f"에너지응축돌파{tag}", "energy": energy}
 
     # ════════════════════════════════════════════════════

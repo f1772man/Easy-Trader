@@ -124,7 +124,7 @@ class TradingEngine:
         self._last_order_ts: dict[str, float] = {}
 
         # 재매수 방지: 당일 익절 종목 + 매도 시각
-        self._today_sold: dict[str, float] = {}   # symbol → 매도 완료 timestamp
+        self._today_sold: dict[str, tuple] = {}   # symbol → (timestamp, reason, exit_price)
         self._today_sold_lock = threading.Lock()  # ✅ race condition 방지
         self._reenter_cooldown_sec: float = float(
             os.environ.get("REENTER_COOLDOWN_SECONDS", "60").split("#")[0].strip()
@@ -427,6 +427,7 @@ class TradingEngine:
         daily_stop_loss = strategy_data.get("dailyStopLoss", 0.0)
 
         data = df[CSV_COLUMNS].values.tolist()
+        can_reenter, trailing_exit_price = self._can_reenter(symbol)
         result = get_strategy_signal({
             "i": i,
             "data": data,
@@ -455,6 +456,7 @@ class TradingEngine:
             "dailyPivotPoint": daily_pivot_point,
             "dailyStopLoss": daily_stop_loss,
             "touchedLimitUp": self._touched_limit_up.get(symbol, False),
+            "trailingExitPrice": trailing_exit_price,
         })
 
         signal = result["signal"]
@@ -476,7 +478,7 @@ class TradingEngine:
         current_price = int(last_1m_close) if last_1m_close else int(close)
 
         if signal == "BUY" and not is_holding:
-            if not self._can_reenter(symbol):
+            if not can_reenter:
                 logger.info(f"[재매수방지] {display} → 쿨다운 중, 스킵")
             elif self._can_place_order(symbol, "BUY", bar_time):
                 executed = False
@@ -626,22 +628,27 @@ class TradingEngine:
         return data
 
     # ── 재매수 방지 ─────────────────────────────────────
-    def _can_reenter(self, symbol: str) -> bool:
-        """당일 익절 종목 재매수 쿨다운 체크. True = 재매수 허용."""
+    def _can_reenter(self, symbol: str) -> tuple[bool, float]:
+        """재매수 가능 여부 + 트레일링 청산가 반환. (allowed, trailing_exit_price)"""
         with self._today_sold_lock:  # ✅ ThreadPoolExecutor race condition 방지
-            sold_ts = self._today_sold.get(symbol)
-        if sold_ts is None:
-            return True
+            record = self._today_sold.get(symbol)
+        if record is None:
+            return True, 0.0
+        sold_ts, sold_reason, exit_price = record
         elapsed = time.time() - sold_ts
+        # 트레일링 청산이면 쿨다운 없이 즉시 허용 (가격·EMA 필터는 strategy에서)
+        if "트레일링" in sold_reason:
+            return True, float(exit_price)
+        # 그 외 청산(손절, EMA이탈 등)은 기존 쿨다운 유지
         if elapsed < self._reenter_cooldown_sec:
             remaining = int(self._reenter_cooldown_sec - elapsed)
             logger.debug(
                 f"[재매수방지] {self._display_name(symbol)} "
                 f"쿨다운 {remaining}초 남음 (매도 후 {int(elapsed)}초 경과)"
             )
-            return False
+            return False, 0.0
         # 쿨다운 만료 → 진입 허용 (레코드는 유지, 재매수 조건 필터가 2차 방어)
-        return True
+        return True, 0.0
 
     # ── 주문 가드 ───────────────────────────────────────
     def _make_order_bar_key(self, symbol: str, signal: str, bar_time: str) -> str:
@@ -735,7 +742,7 @@ class TradingEngine:
             with self._positions_lock:
                 self._positions.pop(symbol, None)
             with self._today_sold_lock:  # ✅ race condition 방지
-                self._today_sold[symbol] = time.time()   # 재매수 방지: 매도 시각 기록
+                self._today_sold[symbol] = (time.time(), reason, price)  # 재매수 방지: 시각·사유·청산가 기록
             self.firebase.delete_trade_state(symbol)
             self.firebase.log_trade(
                 "SELL",
@@ -1017,7 +1024,7 @@ class TradingEngine:
         for p in today_sold:
             sym = p.get("symbol")
             if sym:
-                self._today_sold[sym] = time.time()
+                self._today_sold[sym] = (time.time(), "복원", 0)
         logger.info(f"포지션 복원: {len(self._positions)}개 | 당일매도: {len(self._today_sold)}개")
 
     def get_status(self) -> dict:
