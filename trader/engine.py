@@ -714,7 +714,7 @@ class TradingEngine:
                 "entry_price": price,
                 "entry_time": pos["entry_time"],
             })
-            notify_buy(display, symbol, price, reason, energy.get("score", 0))
+            notify_buy(symbol, raw_name, price, reason, energy.get("score", 0))
             return True
 
         return False
@@ -750,7 +750,7 @@ class TradingEngine:
                     "entry_time": pos.get("entry_time", ""),
                 },
             )
-            notify_sell(display, symbol, price, reason, profit_pct)
+            notify_sell(symbol, raw_name, price, reason, profit_pct)
             return True
 
         return False
