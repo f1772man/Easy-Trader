@@ -522,6 +522,47 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             return {"signal": "BUY", "reason": "1분봉지속상승", "energy": energy}
 
         # ──────────────────────────────────────────────
+        # [조건5-A] 1분봉 EMA 골든크로스 + 거래량 폭발
+        # ──────────────────────────────────────────────
+        if data_1min and len(data_1min) >= 10:
+            closes_1m = [row[PriceIndex.CLOSE] for row in data_1min]
+            vols_1m   = [row[PriceIndex.VOLUME] for row in data_1min]
+
+            # EMA 계산
+            def _ema(series, period):
+                if len(series) < period:
+                    return None
+                k = 2 / (period + 1)
+                ema = series[0]
+                for price in series[1:]:
+                    ema = price * k + ema * (1 - k)
+                return ema
+
+            ema5_curr_1m  = _ema(closes_1m[-5:], 5)
+            ema20_curr_1m = _ema(closes_1m[-20:], 20) if len(closes_1m) >= 20 else None
+
+            ema5_prev_1m  = _ema(closes_1m[-6:-1], 5) if len(closes_1m) >= 6 else None
+            ema20_prev_1m = _ema(closes_1m[-21:-1], 20) if len(closes_1m) >= 21 else None
+
+            # 거래량 평균 (최근 5~10봉)
+            avg_vol = sum(vols_1m[-10:-1]) / max(len(vols_1m[-10:-1]), 1)
+            vol_explosion = volume >= avg_vol * 5
+
+            ema_cross = (
+                ema5_prev_1m is not None and ema20_prev_1m is not None and
+                ema5_curr_1m is not None and ema20_curr_1m is not None and
+                ema5_prev_1m <= ema20_prev_1m and
+                ema5_curr_1m > ema20_curr_1m
+            )
+
+            if ema_cross and vol_explosion:
+                return {
+                    "signal": "BUY",
+                    "reason": "1분봉EMA골든+거래량폭발",
+                    "energy": energy
+                }
+                
+        # ──────────────────────────────────────────────
         # [조건6] 에너지 응축 돌파
         #   VCP 중간점수(>=50) 이면 임계값 55점으로 완화 (기본 60점)
         # ──────────────────────────────────────────────
@@ -788,6 +829,16 @@ def _ma(data: list, i: int, period: int, close_idx: int) -> Optional[float]:
     if i < period - 1:
         return None
     return sum(data[k][close_idx] for k in range(i - period + 1, i + 1)) / period
+
+
+def _ema(series, period):
+    if len(series) < period:
+        return None
+    k = 2 / (period + 1)
+    ema = series[0]
+    for price in series[1:]:
+        ema = price * k + ema * (1 - k)
+    return ema
 
 
 def calc_ma(data: list, i: int, period: int, close_idx: int) -> Optional[float]:
