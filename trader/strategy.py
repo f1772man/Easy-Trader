@@ -673,11 +673,21 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         trailing_stop  = cfg.get("trailingStop",  1.5)
         hard_drop_limit = cfg.get("hardDropLimit", 2.5)
 
-        ema5_break = (
-            close < ema5_curr      # 종가가 EMA5 아래
-            and open_ < ema5_curr  # 시가도 EMA5 아래 (시가가 위면 이탈 아님)
-            and ema5_curr < ema5_prev
-        )
+        ema5_break = False
+
+        if data_1min and len(data_1min) >= 6:
+            closes_1m = [row[PriceIndex.CLOSE] for row in data_1min]
+            opens_1m  = [row[PriceIndex.OPEN] for row in data_1min]
+
+            ema5_curr_1m = _ema(closes_1m[-5:], 5)
+            ema5_prev_1m = _ema(closes_1m[-6:-1], 5)
+
+            if ema5_curr_1m is not None and ema5_prev_1m is not None:
+                ema5_break = (
+                    closes_1m[-1] < ema5_curr_1m     # 현재 1분봉 종가가 EMA5 아래
+                    and opens_1m[-1] < ema5_curr_1m  # 현재 1분봉 시가도 EMA5 아래
+                    and ema5_curr_1m < ema5_prev_1m  # 1분 EMA5 하락 중
+                )
 
         logger.info(
             f"[TRAIL-CHECK] entry:{entry_price} | "
