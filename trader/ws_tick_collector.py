@@ -96,9 +96,17 @@ class WsTickCollector:
             self._5min_cache.clear()
         logger.info("[WS] 일자 변경 → 버퍼 초기화")
 
-    def update_symbols(self, symbols: list):
-        self._symbols = [s.strip() for s in symbols if s.strip()]
+    #def update_symbols(self, symbols: list):
+    #    self._symbols = [s.strip() for s in symbols if s.strip()]
 
+    def update_symbols(self, symbols: list):
+        new_symbols = [s.strip() for s in symbols if s.strip()]
+        if new_symbols == self._symbols:
+            return
+
+        self.stop()
+        self._symbols = new_symbols
+        self.start()
     # ── WebSocket 실행 (별도 스레드 → 전용 event loop) ──
     def _run(self):
         """별도 스레드에서 새 event loop 생성 후 실행 (asyncio.run 충돌 방지)"""
