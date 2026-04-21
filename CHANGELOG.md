@@ -2,19 +2,165 @@
 
 ---
 
-## [2026-04-20]
+## [2026-04-21]
 
 ### 수정
-- `ws_tick_collector.py` `update_symbols()` — 단순 리스트 변경 → collector 재시작 방식으로 변경
-  - 기존: `_symbols` 값만 변경 (실제 WS 구독 미반영)
-  - 변경: `stop()` → `_symbols` 교체 → `start()` 재시작으로 WS 재구독 수행
-  - 효과: 종목 갱신 시 기존 종목 수집 문제 해결 및 신규 종목 정상 반영
 
-### 개선
-- 종목 변경 시 1분/5분 버퍼 초기화 추가
-  - 기존 데이터와 신규 종목 데이터 혼합 방지
+* `strategy.py` — 조건5-A `1분봉EMA골든+거래량폭발` 진입 필터 강화
+
+  * 기존: 1분봉 EMA5/EMA20 골든크로스 + 거래량 5배 시 즉시 진입
+  * 변경: 거래량 10배로 수정
+
+* `strategy.py` — 조건5 `1분봉지속상승` 진입 조건 강화
+
+  * 기존: 1분봉 n개 연속 상승 시 진입
+  * 변경: volume > avg_vol * 5 거래량 5배로     
+
+* `strategy.py` — 매수 공통 필터 추가
+
+  * 모든 BUY 조건 앞단에 추세 필터 적용
+
+    * `close > ema20_curr and ema5_curr > ema20_curr`
+  * 하락 추세 구간 진입 차단
+
+* `strategy.py` — 조건1-B `GC+거래량급증` 거래량 기준 강화
+
+  * 기존: `vol_ratio >= 2`
+  * 변경: `vol_ratio >= 3`
+  * 중간 구간 진입 감소 및 신호 정밀도 개선
+
+* `strategy.py` — 조건4 `거래량폭발` 진입 민감도 완화
+
+  * MA 기울기 조건 강화 (`ma5_slope_pct 상향`)
+  * 단기 노이즈 상승 진입 억제
 
 ---
+
+### 매도 로직 개선
+
+* `strategy.py` — EMA 데드크로스 조건 고도화
+
+  * 기존: 단순 교차 발생 시 매도
+
+    ```python
+    ema5_prev >= ema20_prev and ema5_curr < ema20_curr
+    ```
+  * 변경: 이격도 + 기울기 + 지속성 기반 확정 교차로 변경
+
+    * 교차 발생 (`diff_prev >= 0 and diff_curr < 0`)
+    * 이격도 (`gap_pct >= deadCrossGapPct`)
+    * EMA5 하락 기울기 (`ema5_curr < ema5_prev < ema5_prev2`)
+    * EMA20 상승 중단 (`ema20_curr <= ema20_prev`)
+    * 종가 EMA20 하회 (`close < ema20_curr`)
+  * 미세 교차 및 노이즈 매도 제거
+
+* `strategy.py` — EMA20 이탈 매도 조건 완화
+
+  * 기존: 1회 이탈 시 즉시 매도
+  * 변경: 2회 연속 이탈 또는 조건 강화 기반 매도 (권장 구조)
+  * 휩쏠림 구간에서 과도한 손절 방지
+
+* `strategy.py` — 1분봉 약세 기반 빠른 청산 조건 완화
+
+  * 기존: `interval_drop_pct <= -0.8`
+  * 변경: 손실 조건 및 하락폭 기준 강화
+
+    * `current_profit < -1.5`
+    * `interval_drop_pct <= -1.2`
+  * 단기 변동성에 의한 조기 청산 감소
+
+---
+
+### 설계 변경
+
+* 진입 로직 구조 재정의
+
+  * 기존: 1분봉 기반 즉시 진입 중심
+  * 변경:
+
+    * 5분봉 추세 필터 기반 진입
+    * 1분봉은 보조 신호로 역할 축소
+
+* 매도 로직 구조 개선
+
+  * 기존: 이벤트 기반 (교차/이탈 즉시 반응)
+  * 변경:
+
+    * 추세 기반 (이격도 + 기울기 + 지속성)
+    * 노이즈 제거 중심
+
+---
+
+### 효과
+
+* 동일 종목 반복 매매 (재진입/재청산) 감소
+* 노이즈 구간 진입 차단
+* 추세 기반 매매로 안정성 향상
+* 실전 체결 품질 개선
+
+---
+
+### 주의사항
+
+* 진입 신호 빈도 감소 (정상적인 변화)
+* 초기 수익 기회 일부 감소 가능 → 대신 손실 감소 효과 기대
+* `deadCrossGapPct`, `vol_ratio` 등 파라미터는 시장 상황에 따라 튜닝 필요
+
+---
+
+
+### 추가
+- `ws_tick_collector.py` — `_subscribe_symbol()`, `_unsubscribe_symbol()` 함수 추가  
+  - WebSocket 연결 유지 상태에서 종목별 구독/해제 메시지 전송 기능 구현  
+- `ws_tick_collector.py` — `_ws`, `_loop`, `_connected_event` 상태 변수 추가  
+  - 런타임 중 WebSocket 핸들 및 이벤트 루프 접근을 위한 구조 개선  
+
+### 수정
+- `ws_tick_collector.py` `update_symbols()` — stop/start 방식 제거  
+  - 기존: `stop() → _symbols 교체 → start()`  
+  - 변경: **증분 구독 방식 (added / removed 기준)**  
+    - 추가 종목 → subscribe 메시지 전송  
+    - 제거 종목 → unsubscribe 메시지 전송  
+- `ws_tick_collector.py` `_ws_main()` — 재연결 시 현재 `_symbols` 기준 전체 재구독  
+  - WebSocket 재연결 발생 시 감시 종목 누락 방지  
+
+- `engine.py` `_reload_watch_symbols()` — collector 호출 구조 수정  
+  - 기존: `update_symbols()` 최대 2회 호출 (중간 상태 + 최종 상태)  
+  - 변경: 최종 감시 목록 구성 후 **1회만 호출**  
+
+### 설계 변경
+- WebSocket 구독 방식 변경  
+  - 기존:  
+    - 초기 연결 시 전체 종목 일괄 구독  
+    - 종목 변경 시 전체 재시작 (stop/start)  
+  - 변경:  
+    - 연결 유지 상태에서 종목별 증분 구독  
+    - WebSocket 재연결 시에만 전체 재구독  
+
+- 감시 종목 갱신 흐름 개선  
+  - 기존:  
+    - `new_symbols` 적용 → collector 반영  
+    - `force_added` 적용 → collector 재반영  
+  - 변경:  
+    - `final_symbols = new_symbols + force_added`  
+    - collector 1회 반영  
+
+### 주의사항
+- unsubscribe `tr_type` 값 확인 필요  
+  - 일부 코드: `"0"`  
+  - 일부 코드: `"2"`  
+  - 실제 KIS WebSocket 동작 기준 확인 필요  
+
+- 초기 적용 시 안정성을 위해 단계적 적용 권장  
+  - 1차: 추가 종목 subscribe만 적용  
+  - 2차: unsubscribe 적용  
+
+- 기존 구조 대비 실시간 민감도 증가  
+  - 잘못된 unsubscribe 적용 시 체결 데이터 누락 가능  
+
+---
+
+## [2026-04-20]
 
 ### 추가
 - `strategy.py` — 조건5-A `1분봉EMA골든+거래량폭발` 매수 조건 추가  
@@ -45,34 +191,6 @@
 ### 주의사항
 - 신규 조건은 급등 초입 포착 목적 → 신호 빈도 증가 가능  
 - 단독 사용 시 노이즈 증가 → 기존 EMA20 필터 유지 권장  
-
----
-
-### 추가
-- `strategy.py` — 트레일링 스탑에 1분봉 EMA5 이탈 확인 조건 추가  
-  - 기존 5분봉 EMA5 기준 → 1분봉 EMA5 기준으로 매도 타이밍 보정  
-  - 수익 구간에서 고점 대비 하락 후 **1분봉 EMA5 이탈 시 매도 트리거** 적용  
-- `strategy.py` — `_ema()` 함수 추가  
-  - 1분봉 리스트 기반 EMA 계산 지원 (pandas 의존성 없이 경량 처리)  
-
-### 수정
-- `strategy.py` 트레일링 스탑 EMA 판정 로직 변경  
-  - 기존: 5분봉 `close`, `open`, `ema5_curr` 기반 EMA5 이탈 판정  
-  - 수정: 1분봉 `close`, `open`, `EMA5(1m)` 기반 이탈 판정으로 변경  
-- `strategy.py` 트레일링 스탑 반응 속도 개선  
-  - 5분봉 기준 대비 매도 타이밍을 1분 단위로 앞당겨 수익 보전 강화  
-
-### 설계 변경
-- 트레일링 스탑 판정 기준 일관성 확보  
-  - 기존: 수익률 계산은 1분봉, EMA 판정은 5분봉 (혼합 구조)  
-  - 변경: 수익률 + EMA 판정 모두 1분봉 기준으로 통일  
-- 매도 로직 정밀화  
-  - 기존: 완만한 추세 기반 익절  
-  - 변경: 단기 모멘텀 약화(1분 EMA5 이탈) 반영한 빠른 익절 구조  
-
-### 주의사항
-- 1분봉 기준으로 변경됨에 따라 매도 신호 민감도 증가  
-- 단기 눌림 구간에서도 매도 발생 가능 → 필요 시 `trailingStop` 값 조정 권장  
 
 ---
 

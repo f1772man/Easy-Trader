@@ -799,14 +799,24 @@ class TradingEngine:
             return
 
         prev_symbols = self._watch_symbols[:]
-        self._watch_symbols = new_symbols
         self._symbol_meta = symbol_meta
 
-        if self._collector:
-            self._collector.update_symbols(list(self._watch_symbols))
+        final_symbols = list(new_symbols)
+
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+
+        force_added = [s for s in holding_symbols if s not in final_symbols]
+        if force_added:
+            final_symbols += force_added
+
+        self._watch_symbols = final_symbols
 
         added = [s for s in new_symbols if s not in prev_symbols]
         removed = [s for s in prev_symbols if s not in new_symbols]
+
+        if self._collector:
+            self._collector.update_symbols(list(self._watch_symbols))
 
         with self._snapshot_lock:
             for sym in removed:

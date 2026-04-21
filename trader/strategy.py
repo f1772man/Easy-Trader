@@ -512,7 +512,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             and ma5_up1
             and ma5_slope_ok
             and price_above_ma5
-            and volume > avg_vol * 1.2
+            and volume > avg_vol * 5
         ):
             if not trailing_reentry_price_ok:
                 pct = (close / trailing_exit_price - 1) * 100
@@ -526,17 +526,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         if data_1min and len(data_1min) >= 10:
             closes_1m = [row[PriceIndex.CLOSE] for row in data_1min]
-            vols_1m   = [row[PriceIndex.VOLUME] for row in data_1min]
-
-            # EMA 계산
-            def _ema(series, period):
-                if len(series) < period:
-                    return None
-                k = 2 / (period + 1)
-                ema = series[0]
-                for price in series[1:]:
-                    ema = price * k + ema * (1 - k)
-                return ema
+            vols_1m   = [row[PriceIndex.VOLUME] for row in data_1min]            
 
             ema5_curr_1m  = _ema(closes_1m[-5:], 5)
             ema20_curr_1m = _ema(closes_1m[-20:], 20) if len(closes_1m) >= 20 else None
@@ -546,7 +536,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
             # 거래량 평균 (최근 5~10봉)
             avg_vol = sum(vols_1m[-10:-1]) / max(len(vols_1m[-10:-1]), 1)
-            vol_explosion = volume >= avg_vol * 5
+            vol_explosion = volume >= avg_vol * 10
 
             ema_cross = (
                 ema5_prev_1m is not None and ema20_prev_1m is not None and
@@ -642,7 +632,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             closes_1m = [row[PriceIndex.CLOSE] for row in interval_1m]
             highs_1m = [row[PriceIndex.HIGH] for row in interval_1m]
             interval_drop_pct = ((closes_1m[-1] / max(highs_1m)) - 1) * 100 if highs_1m and max(highs_1m) > 0 else 0
-            if current_profit < 0 and interval_drop_pct <= -0.8:
+            if current_profit < -1.5 and interval_drop_pct <= -1.2:
                 logger.debug(
                     f"⚠️ [1분구간빠른청산] 현재수익:{current_profit:.2f}% | 구간하락:{interval_drop_pct:.2f}% | 구간봉수:{len(interval_1m)}"
                 )
@@ -727,16 +717,54 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             }
         
         # ──────────────────────────────────────────────
-        # [D] EMA 데드크로스
+        # [D] EMA 데드크로스 확정
+        #   단순 교차가 아니라
+        #   1) 교차 발생
+        #   2) 이격도 확보
+        #   3) EMA5 하락 기울기
+        #   4) 지속성 확인
         # ──────────────────────────────────────────────
-        if ema5_prev >= ema20_prev and ema5_curr < ema20_curr:
-            return {"signal": "SELL", "reason": "EMA데드크로스", "energy": energy}
+        dead_cross_gap_pct = cfg.get("deadCrossGapPct", 0.10)          # 최소 이격도 (%)
+        dead_cross_confirm_bars = cfg.get("deadCrossConfirmBars", 1)   # 지속성용, 현재는 1봉 확인 개념
 
-        # ──────────────────────────────────────────────
-        # [E] EMA20 이탈
-        # ──────────────────────────────────────────────
-        if close < ema20_curr and ema20_curr < ema20_prev:
-            return {"signal": "SELL", "reason": "EMA20이탈", "energy": energy}
+        diff_prev = ema5_prev - ema20_prev
+        diff_curr = ema5_curr - ema20_curr
+
+        # 1) 교차 발생
+        dead_cross = diff_prev >= 0 and diff_curr < 0
+
+        # 2) 이격도: EMA5가 EMA20 아래로 얼마나 내려갔는지
+        gap_pct = ((ema20_curr - ema5_curr) / ema20_curr * 100) if ema20_curr > 0 else 0.0
+        gap_ok = gap_pct >= dead_cross_gap_pct
+
+        # 3) 기울기: EMA5가 실제 하락 중인지
+        ema5_down = (
+            ema5_prev2 is not None
+            and ema5_curr < ema5_prev < ema5_prev2
+        )
+
+        # EMA20도 꺾이거나 최소한 상승 둔화 상태인지 함께 확인
+        ema20_not_rising = ema20_curr <= ema20_prev
+
+        # 4) 지속성:
+        # 현재봉 종가도 EMA20 아래에 있어야 하고,
+        # EMA5 자체도 EMA20 아래에 머문 상태를 확인
+        close_below_ema20 = close < ema20_curr
+        stay_below_ok = diff_curr < 0 and close_below_ema20
+
+        if dead_cross and gap_ok and ema5_down and ema20_not_rising and stay_below_ok:
+            logger.debug(
+                f"📉 [EMA데드크로스확정] "
+                f"diff_prev:{diff_prev:.4f} | diff_curr:{diff_curr:.4f} | "
+                f"gap:{gap_pct:.3f}% | "
+                f"ema5_prev2:{ema5_prev2} | ema5_prev:{ema5_prev} | ema5_curr:{ema5_curr} | "
+                f"ema20_prev:{ema20_prev} | ema20_curr:{ema20_curr} | close:{close}"
+            )
+            return {
+                "signal": "SELL",
+                "reason": f"EMA데드크로스확정(이격{gap_pct:.2f}%)",
+                "energy": energy,
+            }
 
     return {"signal": None, "reason": "", "energy": energy}
 
