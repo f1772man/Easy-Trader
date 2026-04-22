@@ -2,6 +2,84 @@
 
 ---
 
+## [2026-04-22]
+
+### 수정
+
+* `strategy.py` — 조건1 `GC+전고돌파` 진입 로직 개선
+
+  * 기존: 돌파 발생 시 즉시 진입
+
+    ```python
+    if has_recent_golden_cross and is_within_gc_window and is_swing_breakout:
+        return BUY
+    ```
+
+  * 변경: **확인봉 기반 진입 구조로 수정**
+
+    * 이전 봉에서도 돌파 상태 유지 시에만 진입
+    * 단기 가짜 돌파(윗꼬리, 순간 돌파) 차단
+
+    ```python
+    prev_close = data[i - 1][close]
+    prev_breakout = prev_close > swing_high
+    ```
+
+---
+
+* `strategy.py` — 조건1 `GC+전고돌파` 돌파폭 필터 추가
+
+  * 최소 돌파폭 기준 도입
+
+    * `breakout_margin_pct >= minBreakoutMarginPct`
+
+  * 미세 돌파(틱 돌파) 진입 차단
+
+---
+
+* `strategy.py` — 조건1 `GC+전고돌파` 이격 과열 차단 추가
+
+  * EMA5 대비 과도한 이격 시 진입 차단
+
+    ```python
+    (close / ema5_curr - 1) * 100 <= maxDistanceFromEma5Pct
+    ```
+
+  * 과열 구간 추격 매수 방지
+
+---
+
+### 설계 변경
+
+* 돌파 전략 구조 변경
+
+  * 기존:
+
+    * 돌파 즉시 진입 (Breakout = Entry)
+
+  * 변경:
+
+    * 돌파 → 유지 확인 → 진입 (Breakout + Confirmation)
+
+---
+
+### 효과
+
+* 가짜 돌파 진입 감소
+* 초반 눌림 후 손절 발생 빈도 감소
+* 진입 신호 신뢰도 상승
+* 실전 체결 품질 개선
+
+---
+
+### 주의사항
+
+* 진입 타이밍이 1봉 지연됨 (정상 동작)
+* 초기 급등 종목 일부 놓칠 수 있음
+* 대신 손실 감소 및 승률 개선 기대
+
+---
+
 ## [2026-04-21]
 
 ### 수정

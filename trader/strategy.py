@@ -366,7 +366,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         # ── 공통 가드: 현재가가 EMA20 위에 있어야 매수 가능 ──
         if close <= ema20_curr:
-            return {"signal": None, "reason": "", "energy": energy}
+            return {"signal": None, "reason": "", "energy": energy}        
 
         # ──────────────────────────────────────────────
         # [조건0-A] VCP 최우선: 일봉 VCP돌파 고점수 + 5분봉 Pivot 돌파
@@ -418,6 +418,50 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # [조건1] GC + 전고점 돌파
         # ──────────────────────────────────────────────        
         if has_recent_golden_cross and is_within_gc_window and is_swing_breakout:
+
+            # ──────────────────────────────────────────────
+            # [1] EMA 정렬 체크 (기존 유지)
+            # ──────────────────────────────────────────────
+            if not (ema5_curr > ema20_curr and close > ema5_curr and close > ma5_curr):
+                return {"signal": "HOLD", "reason": "GC전고돌파-EMA미정렬", "energy": energy}
+
+            # ──────────────────────────────────────────────
+            # [2] 돌파폭 필터
+            # ──────────────────────────────────────────────
+            breakout_level = swing_high
+
+            breakout_margin_pct = ((close / breakout_level) - 1) * 100 if breakout_level else 0
+            if breakout_margin_pct < cfg.get("minBreakoutMarginPct", 0.3):
+                return {"signal": "HOLD", "reason": "돌파폭부족", "energy": energy}
+
+            # ──────────────────────────────────────────────
+            # [3] 이격 과열 차단
+            # ──────────────────────────────────────────────
+            dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
+            if dist_from_ema5 > cfg.get("maxDistanceFromEma5Pct", 3.0):
+                return {"signal": "HOLD", "reason": "이격과열", "energy": energy}
+
+            # ──────────────────────────────────────────────
+            # [4] 확인봉 (핵심)
+            # ──────────────────────────────────────────────
+            if i <= 0:
+                return {"signal": "HOLD", "reason": "데이터부족", "energy": energy}
+
+            prev_close = data[i - 1][pi["close"]]
+            
+            prev_breakout = (
+                swing_high is not None
+                and prev_close > swing_high
+            )
+
+            if not prev_breakout:
+                return {"signal": "HOLD", "reason": "돌파확인대기", "energy": energy}
+
+            tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
+            return {"signal": "BUY", "reason": "GC+전고돌파확인{tag}", "energy": energy}
+        
+        """
+        if has_recent_golden_cross and is_within_gc_window and is_swing_breakout:
             if not (ema5_curr > ema20_curr and close > ema5_curr and ema5_slope_ok):
                 logger.debug(
                     f"⛔ [GC전고차단] EMA 미정렬 | "
@@ -426,6 +470,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 return {"signal": "HOLD", "reason": "GC전고돌파-EMA미정렬", "energy": energy}
             tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
             return {"signal": "BUY", "reason": f"GC+전고돌파{tag}", "energy": energy}
+        """
         # ──────────────────────────────────────────────
         # [조건1-B] GC + 거래량 급증
         # ──────────────────────────────────────────────
@@ -439,7 +484,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             if not trailing_reentry_ema_ok:
                 return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
             return {"signal": "BUY", "reason": f"GC+거래량급증({vol_ratio:.1f}배){tag}", "energy": energy}
-
+        
         # ──────────────────────────────────────────────
         # [조건2] 전일 고가 돌파
         # ──────────────────────────────────────────────
@@ -665,6 +710,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         ema5_break = False
 
+        """
         if data_1min and len(data_1min) >= 6:
             closes_1m = [row[PriceIndex.CLOSE] for row in data_1min]
             opens_1m  = [row[PriceIndex.OPEN] for row in data_1min]
@@ -678,6 +724,15 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                     and opens_1m[-1] < ema5_curr_1m  # 현재 1분봉 시가도 EMA5 아래
                     and ema5_curr_1m < ema5_prev_1m  # 1분 EMA5 하락 중
                 )
+        """
+        
+        # 5분봉 기준 EMA5 이탈
+        if ema5_curr is not None and ema5_prev is not None:
+            ema5_break = (
+                close < ema5_curr     # 현재 5분봉 종가가 EMA5 아래
+                and open_ < ema5_curr # 현재 5분봉 시가도 EMA5 아래
+                and ema5_curr < ema5_prev  # EMA5 하락 중
+            )
 
         logger.info(
             f"[TRAIL-CHECK] entry:{entry_price} | "
@@ -693,7 +748,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             and drop_from_peak >= trailing_stop
             and ema5_break
         ):
-            reason = f"트레일링+EMA5이탈(시작{trailing_start:.2f}%, 되돌림{trailing_stop:.2f}%↓)"
+            reason = f"트레일링+EMA5이탈(5분봉)(시작{trailing_start:.2f}%, 되돌림{trailing_stop:.2f}%↓)"
             if interval_weak:
                 reason = f"1분구간+{reason}"
             return {

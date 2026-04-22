@@ -141,7 +141,10 @@ class TradingEngine:
 
     # ── 종목명(코드) ──────────────────────────────────
     def _display_name(self, symbol: str) -> str:
-        name = self._symbol_meta.get(symbol, {}).get("name", "")
+        with self._positions_lock:
+            pos_name = self._positions.get(symbol, {}).get("name", "")
+        meta_name = self._symbol_meta.get(symbol, {}).get("name", "")
+        name = pos_name or meta_name
         return f"{_normalize_name(name, symbol)}({symbol})" if name else symbol
 
     # ── 메인 루프 ─────────────────────────────────────
@@ -544,8 +547,15 @@ class TradingEngine:
         if not rows:
             return None
 
-        current_bucket = (now.hour * 60 + now.minute) // 5 * 5
-        current_date = now.strftime("%Y%m%d")
+        last_time = rows[-1][0]
+        date_str, hhmm = last_time.split("_")
+
+        h = int(hhmm[:2])
+        m = int(hhmm[2:4])
+
+        minute_total = h * 60 + m
+        current_bucket = ((minute_total // 5) + 1) * 5
+        current_date = date_str
         bucket_rows = []
 
         for row in rows:
@@ -556,7 +566,8 @@ class TradingEngine:
             if dt_part != current_date:
                 continue
             minute = int(hhmm[:2]) * 60 + int(hhmm[2:])
-            if (minute // 5) * 5 == current_bucket:
+            row_bucket = ((minute // 5) + 1) * 5
+            if row_bucket == current_bucket:
                 bucket_rows.append(row)
 
         if not bucket_rows:
@@ -1017,24 +1028,31 @@ class TradingEngine:
     # ── 포지션 복원 ───────────────────────────────────
     def _restore_positions(self):
         positions = self.firebase.get_all_positions()
-        today_sold = self.firebase.get_sold_positions()  # is_holding=False 별도 조회 필요
-        restored = []  # (sym, raw_name) 튜플
+        today_sold = self.firebase.get_sold_positions()
+        restored = []
+
         with self._positions_lock:
             for p in positions:
                 sym = p.pop("symbol", None)
-                if sym and p.get("entry_price", 0) > 0:
-                    self._positions[sym] = p
-                    restored.append((sym, p.get("name", "")))
-                else:
+                if not sym or p.get("entry_price", 0) <= 0:
                     logger.warning(f"[포지션복원] {sym} entry_price 없음 → 복원 스킵")
+                    continue
+
+                raw_name = p.get("name", "") or ""
+                p["name"] = _normalize_name(raw_name, sym)
+
+                self._positions[sym] = p
+                restored.append((sym, p["name"]))
+
         for sym, raw_name in restored:
-            name = _normalize_name(raw_name, sym)
-            display = f"{name}({sym})" if name else sym
+            display = f"{raw_name}({sym})" if raw_name else sym
             logger.info(f"[포지션복원] {display} 복원 완료")
+
         for p in today_sold:
             sym = p.get("symbol")
             if sym:
                 self._today_sold[sym] = (time.time(), "복원", 0)
+
         logger.info(f"포지션 복원: {len(self._positions)}개 | 당일매도: {len(self._today_sold)}개")
 
     def get_status(self) -> dict:

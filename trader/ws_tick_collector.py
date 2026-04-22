@@ -336,8 +336,9 @@ class WsTickCollector:
 
         hhmm = time_key.split("_")[1] if "_" in time_key else time_key[-4:]
         h, m = int(hhmm[:2]), int(hhmm[2:])
-        bucket_m = (h * 60 + m) // 5 * 5
-        cur_bucket = f"{time_key.split('_')[0]}_{bucket_m // 60:02d}{bucket_m % 60:02d}"
+        minute_total = h * 60 + m
+        bucket_m = ((minute_total // 5) + 1) * 5
+        cur_bucket = f"{date}_{bucket_m // 60:02d}{bucket_m % 60:02d}"
 
         buckets = {}
         for row in buf:
@@ -356,7 +357,7 @@ class WsTickCollector:
                 b[4] = row[4]
                 b[5] += row[5]
 
-        completed = [v for k, v in sorted(buckets.items()) if k != cur_bucket]
+        completed = [v for k, v in sorted(buckets.items()) if k < cur_bucket]
 
         with self._lock:
             self._5min_cache[symbol] = completed
