@@ -706,7 +706,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         drop_from_peak = max_profit_so_far - current_profit
         trailing_start = cfg.get("trailingStart", 3.0)
         trailing_stop  = cfg.get("trailingStop",  1.5)
-        hard_drop_limit = cfg.get("hardDropLimit", 2.5)
+        hard_drop_limit = cfg.get("hardDropLimit", 1.5)
 
         ema5_break = False
 
@@ -745,12 +745,9 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         
         if (
             max_profit_so_far >= trailing_start
-            and drop_from_peak >= trailing_stop
-            and ema5_break
+            and drop_from_peak >= trailing_stop            
         ):
-            reason = f"트레일링+EMA5이탈(5분봉)(시작{trailing_start:.2f}%, 되돌림{trailing_stop:.2f}%↓)"
-            if interval_weak:
-                reason = f"1분구간+{reason}"
+            reason = f"트레일링(시작{trailing_start:.2f}%, 되돌림{trailing_stop:.2f}%↓)"            
             return {
                 "signal": "SELL",
                 "reason": reason,
