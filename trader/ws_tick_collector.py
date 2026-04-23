@@ -338,14 +338,14 @@ class WsTickCollector:
         h, m = int(hhmm[:2]), int(hhmm[2:])
         minute_total = h * 60 + m
         bucket_m = ((minute_total // 5) + 1) * 5
-        cur_bucket = f"{date}_{bucket_m // 60:02d}{bucket_m % 60:02d}"
+        cur_bucket = f"{time_key.split('_')[0]}_{bucket_m // 60:02d}{bucket_m % 60:02d}"
 
         buckets = {}
         for row in buf:
             t = row[0]
             hh = t.split("_")[1] if "_" in t else t[-4:]
-            bh, bm = int(hh[:2]), int(hh[2:])
-            bkt_m = (bh * 60 + bm) // 5 * 5
+            bh, bm = int(hh[:2]), int(hh[2:])            
+            bkt_m = ((bh * 60 + bm) // 5 + 1) * 5
             bkt_key = f"{t.split('_')[0]}_{bkt_m // 60:02d}{bkt_m % 60:02d}"
 
             if bkt_key not in buckets:
