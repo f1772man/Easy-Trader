@@ -6,3 +6,4 @@ PyYAML==6.0.2
 pycryptodome==3.21.0
 websockets==14
 pandas==2.2.3
+python-dotenv==1.0.1

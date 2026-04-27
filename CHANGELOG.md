@@ -2,6 +2,117 @@
 
 ---
 
+## [2026-04-27]
+
+### 수정
+
+* `engine.py` — `_reload_watch_symbols()` 텔레그램 알림 메시지 구조 개선
+
+  * 기존: 총 개수만 표시되어 구성(전략/포지션) 구분이 불명확
+
+    ```python
+    lines = [
+        f"📋 감시 종목 갱신 ({now_str})",
+        f"총 {len(self._watch_symbols)}개"
+    ]
+    ```
+
+  * 변경: **전략 종목 + 포지션 종목 구성 분리 표시**
+
+    ```python
+    lines = [
+        f"📋 감시 종목 갱신 ({now_str})",
+        f"총 {len(self._watch_symbols)}개 (전략 {len(new_symbols)} + 포지션 {len(holding_extra)})"
+    ]
+    ```
+
+---
+
+* `engine.py` — 감시 종목 분류 항목 추가
+
+  * 기존:
+
+    * 신규 편입 / 포지션 유지 / 제외만 표시
+
+  * 변경:
+
+    * **연속 편입(overlap) 항목 추가**
+
+    ```python
+    overlap = [s for s in new_symbols if s in prev_symbols] if prev_symbols else []
+    ```
+
+---
+
+### 설계 변경
+
+* 감시 종목 상태 분류 구조 재정의
+
+  * 기존:
+
+    * 신규 / 제거 중심 단순 비교 구조
+
+  * 변경:
+
+    * 신규 편입 (`added`)
+    * 연속 편입 (`overlap`)
+    * 포지션 유지 (`holding_extra`)
+    * 제외 (`removed`)
+
+---
+
+### 효과
+
+* 감시 종목 구성에 대한 가시성 향상
+* 전략 결과와 실제 보유 포지션 구분 명확화
+* “총 개수 vs 세부 항목 불일치”에 대한 혼란 제거
+* 운영 중 디버깅 및 판단 속도 개선
+
+---
+
+### 주의사항
+
+* `연속 편입`은 **보유 여부와 무관**한 개념
+
+  * 단순히 이전 전략 리스트와 현재 리스트의 교집합
+
+* `포지션 유지`와 의미 혼동 주의 필요
+
+  * 포지션 유지 = 실제 계좌 보유 종목  
+  * 연속 편입 = 전략 결과 유지 종목
+
+---
+
+### 추가
+
+* `engine.py` — 종목 목록 출력 조건 개선
+
+  * 기존:
+
+    ```python
+    if not added and not removed:
+    ```
+
+  * 변경:
+
+    ```python
+    if not added and not removed and not overlap:
+    ```
+
+  * 변경 이유:
+
+    * 연속 편입 출력과 종목 목록 출력 중복 방지
+
+---
+
+### UI 개선
+
+* 종목 목록 출력 시 헤더 추가
+
+  ```python
+  lines += ["", "📄 종목 목록:"]
+---
+
 ## [2026-04-23]
 
 ### 수정

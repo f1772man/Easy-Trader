@@ -101,11 +101,6 @@ class TradingEngine:
         self._watch_symbols: list[str] = []
         self._symbol_meta: dict = {}
 
-        # 기존 구조 호환용 버퍼/캐시
-        self._1min_buffer: dict = {}
-        self._buffer_lock = threading.Lock()
-        self._5min_cache: dict = {}
-
         # WebSocket 체결 수신기 (종목 로드 후 start)
         self._collector: WsTickCollector = None
 
@@ -228,9 +223,6 @@ class TradingEngine:
         with self._strategy_lock:
             self._strategy_cache.clear()
             self._strategy_cache_date = ""
-        with self._buffer_lock:
-            self._1min_buffer.clear()
-            self._5min_cache.clear()
 
         self._cache_date = today_str
         self._last_flush_date = ""
@@ -413,8 +405,14 @@ class TradingEngine:
 
             entry_time = pos.get("entry_time", "")
             if entry_time and ws_1min:
-                entry_bucket = entry_time[:13]
-                ws_1min_after = [r for r in ws_1min if r[0] > entry_bucket]
+                # entry_time = "YYYYMMDD_HHMMSS" (초단위)
+                # ws_1min r[0] = "YYYYMMDD_HHMM" (분단위)
+                # 진입 분("YYYYMMDD_HHMM")과 같은 봉은 포함해야
+                # max_price 계산에서 진입 분 고가가 누락되지 않음
+                entry_bucket = entry_time[:11]  # "YYYYMMDD_HH" → 시 단위 앞 11자
+                entry_min = entry_time[9:13]    # "HHMM"
+                entry_time_key = f"{entry_time[:8]}_{entry_min}"  # "YYYYMMDD_HHMM"
+                ws_1min_after = [r for r in ws_1min if r[0] >= entry_time_key]
             else:
                 ws_1min_after = ws_1min
 
@@ -548,22 +546,20 @@ class TradingEngine:
             return None
 
         last_time = rows[-1][0]
-        date_str, hhmm = last_time.split("_")
+        date_str = last_time.split("_")[0]
 
-        h = int(hhmm[:2])
-        m = int(hhmm[2:4])
+        # 버킷 계산: collector와 동일한 공식 재사용
+        cur_bucket_key = self._collector._calc_bucket(last_time)
+        _, bkt_hhmm = cur_bucket_key.split("_")
+        current_bucket = int(bkt_hhmm[:2]) * 60 + int(bkt_hhmm[2:])
 
-        minute_total = h * 60 + m
-        current_bucket = ((minute_total // 5) + 1) * 5
-        current_date = date_str
         bucket_rows = []
-
         for row in rows:
             t = row[0]
             if "_" not in t:
                 continue
             dt_part, hhmm = t.split("_", 1)
-            if dt_part != current_date:
+            if dt_part != date_str:
                 continue
             minute = int(hhmm[:2]) * 60 + int(hhmm[2:])
             row_bucket = ((minute // 5) + 1) * 5
@@ -574,7 +570,7 @@ class TradingEngine:
             return None
 
         return [
-            f"{current_date}_{current_bucket // 60:02d}{current_bucket % 60:02d}",
+            cur_bucket_key,
             bucket_rows[0][1],
             max(r[2] for r in bucket_rows),
             min(r[3] for r in bucket_rows),
@@ -594,7 +590,7 @@ class TradingEngine:
         merged = list(completed)
         if merged and merged[-1][0] == partial[0]:
             merged[-1] = partial
-        elif not merged or merged[-1][0] != partial[0]:
+        else:
             merged.append(partial)
         return merged
 
@@ -861,19 +857,34 @@ class TradingEngine:
         logger.info(f"[감시목록] {len(self._watch_symbols)}개 | 추가={added} | 제거={removed}")
 
         if not prev_symbols or added or removed:
+            overlap = [s for s in new_symbols if s in prev_symbols] if prev_symbols else []
             now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-            lines = [f"📋 감시 종목 갱신 ({now_str})", f"총 {len(new_symbols)}개"]
+            holding_extra = [s for s in self._watch_symbols if s not in new_symbols]
+            lines = [
+                f"📋 감시 종목 갱신 ({now_str})",
+                f"총 {len(self._watch_symbols)}개 (전략 {len(new_symbols)} + 포지션 {len(holding_extra)})"
+            ]
             if added:
-                lines += ["", "✅ 신규 편입:"]
+                lines += ["", f"✅ 신규 편입: {len(added)}개"]
                 for t in added:
                     m = symbol_meta.get(t, {})
                     lines.append(f"  • {m.get('name', t)}({t}) [{m.get('strategy', '-')}] {m.get('score', 0):.1f}점")
+            # 연속 편입 (추가)
+            if overlap:
+                lines += ["", f"🔁 연속 편입: {len(overlap)}개"]
+                for t in overlap:
+                    m = symbol_meta.get(t, {})
+                    lines.append(f"  • {m.get('name', t)}({t}) [{m.get('strategy', '-')}] {m.get('score', 0):.1f}점")
+            if holding_extra:
+                lines += ["", f"📌 포지션 유지: {len(holding_extra)}개"]
+                for t in holding_extra:
+                    lines.append(f"  • {self._display_name(t)}")
             if removed:
                 lines += ["", "❌ 제외:"]
                 for t in removed:
                     lines.append(f"  • {t}")
-            if not added and not removed:
-                lines += ["", "종목 목록:"]
+            if not added and not removed and not overlap:
+                lines += ["", "📄 종목 목록:"]
                 for t in new_symbols[:15]:
                     m = symbol_meta.get(t, {})
                     lines.append(f"  • {m.get('name', t)}({t}) [{m.get('strategy', '-')}] {m.get('score', 0):.1f}점")
@@ -944,6 +955,7 @@ class TradingEngine:
 
         from trader.telegram import send_telegram
 
+        all_watch = list(self._watch_symbols)
         logger.info(f"[워밍업] {len(symbols)}종목 전일 snapshot + strategy_results 로드")
         send_telegram(
             f"⏳ 장전 데이터 로드 중... ({len(symbols)}종목)\n전일 1분봉 + 전략 캐시를 준비합니다."
@@ -959,9 +971,23 @@ class TradingEngine:
             self._premarket_warmup_done_date = self._strategy_cache_date
 
         logger.info(f"[워밍업] 완료 — 성공:{ok} / 실패:{fail}")
-        send_telegram(
-            f"✅ 장전 데이터 로드 완료\n성공:{ok} / 실패:{fail}\n신호 판별 준비가 끝났습니다."
-        )
+
+        # 완료 메시지: 전체 감시 종목 목록 표시
+        lines = [f"✅ 장전 데이터 로드 완료", f"성공:{ok} / 실패:{fail}", f"신호 판별 준비가 끝났습니다.", ""]
+        lines.append(f"📋 감시 종목 ({len(all_watch)}개):")
+        for s in all_watch:
+            m = self._symbol_meta.get(s, {})
+            name = m.get("name", "") or self._display_name(s)
+            strategy = m.get("strategy", "")
+            score = m.get("score", 0)
+            with self._positions_lock:
+                is_holding = s in self._positions
+            tag = " 📌" if is_holding else ""
+            if strategy:
+                lines.append(f"  • {name}({s}) [{strategy}] {score:.1f}점{tag}")
+            else:
+                lines.append(f"  • {name}({s}){tag}")
+        send_telegram("\n".join(lines))
         return fail == 0
 
     # ── CSV 저장 ──────────────────────────────────────
@@ -973,10 +999,6 @@ class TradingEngine:
             for sym in self._watch_symbols:
                 cache_1m[sym] = self._collector.get_1min(sym)
                 cache_5m[sym] = self._collector.get_5min(sym)
-        else:
-            with self._buffer_lock:
-                cache_1m = {sym: [row[:6] for row in rows] for sym, rows in self._1min_buffer.items()}
-                cache_5m = {sym: list(rows) for sym, rows in self._5min_cache.items()}
 
         total_1m = sum(len(v) for v in cache_1m.values())
         total_5m = sum(len(v) for v in cache_5m.values())

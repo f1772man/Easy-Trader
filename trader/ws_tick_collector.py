@@ -81,8 +81,13 @@ class WsTickCollector:
         logger.info("[WS] 체결 수신 중지")
 
     def get_5min(self, symbol: str) -> list:
+        now_kst = datetime.now(KST)
+        hhmm = now_kst.strftime("%H%M")
+        date = now_kst.strftime("%Y%m%d")
+        cur_bucket = self._calc_bucket(f"{date}_{hhmm}")
         with self._lock:
-            return list(self._5min_cache.get(symbol, []))
+            cache = self._5min_cache.get(symbol, {})
+            return [v for k, v in sorted(cache.items()) if k < cur_bucket]
 
     def get_1min(self, symbol: str) -> list:
         with self._lock:
@@ -91,7 +96,7 @@ class WsTickCollector:
     def reset_day(self):
         with self._lock:
             self._1min_buffer.clear()
-            self._5min_cache.clear()
+            self._5min_cache.clear()   # dict of dicts → clear 동일
         logger.info("[WS] 일자 변경 → 버퍼 초기화")
 
     def update_symbols(self, symbols: list):
@@ -307,7 +312,7 @@ class WsTickCollector:
                 logger.info(f"[WS] 첫 체결 수신: {symbol} {price}원 {time_key}")
 
             self._update_1min(symbol, time_key, price, cntg_vol)
-            self._update_5min(symbol, time_key)
+            self._update_5min(symbol, time_key, price, cntg_vol)
 
         except Exception as e:
             logger.debug(f"[WS] _on_tick 오류: {e}")
@@ -327,37 +332,27 @@ class WsTickCollector:
             else:
                 buf.append([time_key, price, price, price, price, vol])
 
-    def _update_5min(self, symbol: str, time_key: str):
-        with self._lock:
-            buf = list(self._1min_buffer.get(symbol, []))
-
-        if not buf:
-            return
-
-        hhmm = time_key.split("_")[1] if "_" in time_key else time_key[-4:]
+    @staticmethod
+    def _calc_bucket(time_key: str) -> str:
+        """time_key('YYYYMMDD_HHMM') → 해당 분이 속한 5분봉 버킷 키 반환."""
+        date, hhmm = time_key.split("_")
         h, m = int(hhmm[:2]), int(hhmm[2:])
-        minute_total = h * 60 + m
-        bucket_m = ((minute_total // 5) + 1) * 5
-        cur_bucket = f"{time_key.split('_')[0]}_{bucket_m // 60:02d}{bucket_m % 60:02d}"
+        bkt_m = ((h * 60 + m) // 5 + 1) * 5
+        return f"{date}_{bkt_m // 60:02d}{bkt_m % 60:02d}"
 
-        buckets = {}
-        for row in buf:
-            t = row[0]
-            hh = t.split("_")[1] if "_" in t else t[-4:]
-            bh, bm = int(hh[:2]), int(hh[2:])            
-            bkt_m = ((bh * 60 + bm) // 5 + 1) * 5
-            bkt_key = f"{t.split('_')[0]}_{bkt_m // 60:02d}{bkt_m % 60:02d}"
-
-            if bkt_key not in buckets:
-                buckets[bkt_key] = [bkt_key, row[1], row[2], row[3], row[4], row[5]]
-            else:
-                b = buckets[bkt_key]
-                b[2] = max(b[2], row[2])
-                b[3] = min(b[3], row[3])
-                b[4] = row[4]
-                b[5] += row[5]
-
-        completed = [v for k, v in sorted(buckets.items()) if k < cur_bucket]
+    def _update_5min(self, symbol: str, time_key: str, price: int, vol: int):
+        """증분 업데이트: 현재 버킷만 갱신 — O(1)."""
+        cur_bucket = self._calc_bucket(time_key)
 
         with self._lock:
-            self._5min_cache[symbol] = completed
+            cache = self._5min_cache.setdefault(symbol, {})
+
+            if cur_bucket not in cache:
+                # 새 버킷 시작 → Open = 현재가
+                cache[cur_bucket] = [cur_bucket, price, price, price, price, 0]
+
+            b = cache[cur_bucket]
+            b[2] = max(b[2], price)  # High
+            b[3] = min(b[3], price)  # Low
+            b[4] = price             # Close
+            b[5] += vol              # Volume

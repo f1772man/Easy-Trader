@@ -342,6 +342,35 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                     has_recent_golden_cross = True
                     break
 
+        logger.debug(
+            f"[조건상태] "
+            f"GC:{has_recent_golden_cross} | "
+            f"윈도우:{is_within_gc_window} | "
+            f"돌파:{is_swing_breakout} | "
+            f"거래량:{vol_ratio:.2f} | "
+            f"ma5상승:{ma5_up1} | "
+            f"양봉:{is_bull_candle} | "
+            f"ma5위:{price_above_ma5}"
+        )
+        
+        if not is_within_gc_window:
+            logger.debug("[탈락] GC 시간조건 실패")
+
+        if not is_ma_bull:
+            logger.debug("[탈락] MA 정배열 아님")
+
+        if vol_ratio < 2:
+            logger.debug(f"[탈락] 거래량 부족 | ratio:{vol_ratio:.2f}")
+
+        if not ma5_up1:
+            logger.debug("[탈락] MA5 상승 아님")
+
+        if not is_bull_candle:
+            logger.debug("[탈락] 양봉 아님")
+
+        if not price_above_ma5:
+            logger.debug("[탈락] MA5 위 아님")
+
         # ── VCP 공통 변수 ─────────────────────────────────
         is_vcp_high              = daily_vcp_score >= 70
         is_vcp_medium            = daily_vcp_score >= 50
@@ -458,32 +487,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 return {"signal": "HOLD", "reason": "돌파확인대기", "energy": energy}
 
             tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
-            return {"signal": "BUY", "reason": "GC+전고돌파확인{tag}", "energy": energy}
-        
-        """
-        if has_recent_golden_cross and is_within_gc_window and is_swing_breakout:
-            if not (ema5_curr > ema20_curr and close > ema5_curr and ema5_slope_ok):
-                logger.debug(
-                    f"⛔ [GC전고차단] EMA 미정렬 | "
-                    f"ema5:{ema5_curr:.0f} | ema20:{ema20_curr:.0f} | close:{close:.0f}"
-                )
-                return {"signal": "HOLD", "reason": "GC전고돌파-EMA미정렬", "energy": energy}
-            tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
-            return {"signal": "BUY", "reason": f"GC+전고돌파{tag}", "energy": energy}
-        """
-        # ──────────────────────────────────────────────
-        # [조건1-B] GC + 거래량 급증
-        # ──────────────────────────────────────────────
-        if (is_within_gc_window and is_ma_bull
-                and vol_ratio >= 2
-                and ma5_up1 and is_bull_candle and price_above_ma5):
-            tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
-            if not trailing_reentry_price_ok:
-                pct = (close / trailing_exit_price - 1) * 100
-                return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
-            if not trailing_reentry_ema_ok:
-                return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
-            return {"signal": "BUY", "reason": f"GC+거래량급증({vol_ratio:.1f}배){tag}", "energy": energy}
+            return {"signal": "BUY", "reason": f"GC+전고돌파확인{tag}", "energy": energy}        
         
         # ──────────────────────────────────────────────
         # [조건2] 전일 고가 돌파
