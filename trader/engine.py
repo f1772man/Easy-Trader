@@ -11,6 +11,7 @@ engine.py
 import os
 import csv
 import time
+import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -33,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 KST = timezone(timedelta(hours=9))
 DATA_DIR = Path(os.environ.get("DATA_DIR", "DATA"))
+STRATEGY_FILTER_PATH = Path(os.environ.get("STRATEGY_FILTER_PATH", "strategy_filter.json"))
+STRATEGY_FILTER_RELOAD_SECONDS = float(os.environ.get("STRATEGY_FILTER_RELOAD_SECONDS", "5").split("#")[0].strip())
 CSV_COLUMNS = ["time", "open", "high", "low", "close", "volume"]
 WATCH_SYMBOLS = os.environ.get("WATCH_SYMBOLS", "005930,000660").split(",")
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", "5").split("#")[0].strip())
@@ -133,6 +136,62 @@ class TradingEngine:
 
         # Firestore 클라이언트 (공유 싱글턴 — 매 호출마다 신규 생성 방지)
         self._fs = firestore.Client()
+
+        # 전략 필터: strategy_filter.json 변경 감지 후 재로드
+        self._blocked_reasons: set[str] = set()
+        self._strategy_filter_mtime: float = 0.0
+        self._strategy_filter_last_check_ts: float = 0.0
+        self._reload_strategy_filter_if_needed(force=True)
+
+    # ── 전략 필터 재로드 ───────────────────────────────
+    def _reload_strategy_filter_if_needed(self, force: bool = False):
+        """
+        strategy_filter.json 변경 시 차단 매수 조건을 재로드한다.
+        재배포/재시작 없이 파일 수정만으로 다음 BUY 판단부터 반영된다.
+        """
+        now_ts = time.time()
+        if not force and now_ts - self._strategy_filter_last_check_ts < STRATEGY_FILTER_RELOAD_SECONDS:
+            return
+
+        self._strategy_filter_last_check_ts = now_ts
+        path = STRATEGY_FILTER_PATH
+
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            if self._blocked_reasons:
+                self._blocked_reasons = set()
+                self._strategy_filter_mtime = 0.0
+                logger.info("[전략필터] 파일 없음 → 차단조건 초기화")
+            return
+        except Exception as e:
+            logger.warning(f"[전략필터] 파일 상태 확인 실패: {e}")
+            return
+
+        if not force and mtime == self._strategy_filter_mtime:
+            return
+
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            blocked_reasons = data.get("blocked_reasons", [])
+            if not isinstance(blocked_reasons, list):
+                logger.warning("[전략필터] blocked_reasons 형식 오류 → 기존 필터 유지")
+                return
+
+            self._blocked_reasons = {
+                str(reason).strip()
+                for reason in blocked_reasons
+                if str(reason).strip()
+            }
+            self._strategy_filter_mtime = mtime
+
+            logger.info(
+                f"[전략필터] 재로드 완료 | file={path} | 차단조건={len(self._blocked_reasons)}개"
+            )
+        except Exception as e:
+            logger.warning(f"[전략필터] 재로드 실패: {e}")
 
     # ── 종목명(코드) ──────────────────────────────────
     def _display_name(self, symbol: str) -> str:
@@ -430,6 +489,7 @@ class TradingEngine:
         data = df[CSV_COLUMNS].values.tolist()
         can_reenter, trailing_exit_price = self._can_reenter(symbol)
         result = get_strategy_signal({
+            "symbol": symbol,
             "i": i,
             "data": data,
             "cfg": self.cfg,
@@ -479,6 +539,12 @@ class TradingEngine:
         current_price = int(last_1m_close) if last_1m_close else int(close)
 
         if signal == "BUY" and not is_holding:
+            self._reload_strategy_filter_if_needed()
+
+            if reason in self._blocked_reasons:
+                logger.info(f"[BUY-BLOCK][{symbol}] {display} reason={reason}")
+                return
+
             if not can_reenter:
                 logger.info(f"[재매수방지] {display} → 쿨다운 중, 스킵")
             elif self._can_place_order(symbol, "BUY", bar_time):
@@ -703,7 +769,10 @@ class TradingEngine:
 
         budget = int(os.environ.get("MAX_POSITION_SIZE", "1000000").split("#")[0].strip())
         qty = max(1, budget // max(price, 1))
-        logger.info(f"🟢 매수 실행: {display} {qty}주 @ {price}원 / {reason}")
+        logger.info(
+            f"[BUY][{symbol}] {display} "
+            f"price={price} qty={qty} reason={reason}"
+        )
 
         result = kis_api.buy_order(symbol, qty, price)
         if result is not None:
@@ -742,7 +811,10 @@ class TradingEngine:
 
         qty = pos.get("qty", 1)
         profit_pct = (price / entry_price - 1) * 100 if entry_price else 0
-        logger.info(f"🔴 매도 실행: {display} {qty}주 @ {price}원 / {reason} / 수익:{profit_pct:.2f}%")
+        logger.info(
+            f"[SELL][{symbol}] {display} "
+            f"price={price} qty={qty} profit={profit_pct:.2f}% reason={reason}"
+        )
 
         result = kis_api.sell_order(symbol, qty, price)
         if result is not None:

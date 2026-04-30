@@ -172,6 +172,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
     prev_day_volume       = params.get("prevDayVolume", 0) or 0
     prev_day_close        = params.get("prevDayClose", 0) or 0
     data_1min             = params.get("data1Min")
+    symbol                = params.get("symbol", "")
     # VCP 파라미터 — Firestore strategy_results 에서 읽어서 주입, 없으면 기본값
     daily_vcp_score       = int(params.get("dailyVcpScore", 0) or 0)
     daily_strategy        = params.get("dailyStrategy", "") or ""
@@ -193,8 +194,10 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         f"전일고가:{prev_day_high} | 피봇R2:{pivot_r2} | "
         f"VCP점수:{daily_vcp_score} | VCP전략:{daily_strategy}"
     )
+    """
     logger.debug(f"🕯️ [캔들raw] index:{i} | {bar}")
     logger.debug(f"⚙️ [priceIndex] {pi}")
+    """
 
     # ── 에너지 응축 점수 ─────────────────────────────────
     energy: Dict[str, Any] = {
@@ -353,23 +356,28 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             f"ma5위:{price_above_ma5}"
         )
         
+        fail_reasons = []
+
         if not is_within_gc_window:
-            logger.debug("[탈락] GC 시간조건 실패")
+            fail_reasons.append("GC시간")
 
         if not is_ma_bull:
-            logger.debug("[탈락] MA 정배열 아님")
+            fail_reasons.append("MA정배열 아님")
 
         if vol_ratio < 2:
-            logger.debug(f"[탈락] 거래량 부족 | ratio:{vol_ratio:.2f}")
+            fail_reasons.append("거래량 부족")            
 
         if not ma5_up1:
-            logger.debug("[탈락] MA5 상승 아님")
+            fail_reasons.append("MA5 상승 아님")
 
         if not is_bull_candle:
-            logger.debug("[탈락] 양봉 아님")
+            fail_reasons.append("양봉 아님")            
 
         if not price_above_ma5:
-            logger.debug("[탈락] MA5 위 아님")
+            fail_reasons.append("MA5 위 아님")
+            
+        if fail_reasons:
+            logger.debug(f"[BUY-FAIL][{symbol}] {','.join(fail_reasons)}")
 
         # ── VCP 공통 변수 ─────────────────────────────────
         is_vcp_high              = daily_vcp_score >= 70
@@ -394,6 +402,10 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ════════════════════════════════════════════════
 
         # ── 공통 가드: 현재가가 EMA20 위에 있어야 매수 가능 ──
+        # 공통 가드
+        if energy["score"] < 40:
+            return {"signal": "HOLD", "reason": "에너지부족", "energy": energy}
+
         if close <= ema20_curr:
             return {"signal": None, "reason": "", "energy": energy}        
 
@@ -738,7 +750,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 and ema5_curr < ema5_prev  # EMA5 하락 중
             )
 
-        logger.info(
+        logger.debug(
             f"[TRAIL-CHECK] entry:{entry_price} | "
             f"max_after_entry:{max_price_after_entry} | "
             f"current_profit:{current_profit:.2f}% | "

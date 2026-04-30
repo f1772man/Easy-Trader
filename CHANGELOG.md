@@ -2,6 +2,63 @@
 
 ---
 
+## [2026-04-30]
+
+### 추가
+
+* `engine.py` — 전략 필터(`strategy_filter.json`) 기반 매수 차단 기능 추가  
+
+  * `strategy_filter.json` 파일을 통해 매수 조건(reason)별 차단 가능  
+
+  * 매수 신호 발생 시 필터 적용  
+
+    ```python
+    if reason in self._blocked_reasons:
+        logger.info(f"[BUY-BLOCK][{symbol}] {display} reason={reason}")
+        return
+    ```
+
+---
+
+* `engine.py` — 전략 필터 실시간 재로드 기능 추가 (재배포 없이 반영)
+
+  * 파일 변경 시간(`mtime`) 기반 자동 감지  
+
+    ```python
+    if mtime != self._strategy_filter_mtime:
+        self._blocked_reasons = ...
+    ```
+
+  * 최대 약 5초 이내 반영  
+
+---
+
+### 수정
+
+* `engine.py` — 매수/매도 로그 포맷 구조 변경  
+
+  * 기존:
+
+    ```text
+    🟢 매수 실행: 삼성전자(005930) 10주 @ 72000원
+    ```
+
+  * 변경:
+
+    ```text
+    [BUY][005930] 삼성전자(005930) price=72000 qty=10 reason=...
+    ```
+
+  * 매도 로그 동일 구조 적용  
+
+---
+
+* `engine.py` — `get_strategy_signal()` 호출 시 `symbol` 파라미터 전달 추가  
+
+  ```python
+  "symbol": symbol
+---
+
 ## [2026-04-27]
 
 ### 수정
