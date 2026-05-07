@@ -764,7 +764,9 @@ class TradingEngine:
 
     # ── 매수/매도 실행 ─────────────────────────────────
     def _execute_buy(self, symbol: str, price: int, reason: str, energy: dict) -> bool:
-        raw_name = self._symbol_meta.get(symbol, {}).get("name", "")
+        with self._positions_lock:
+            pos_name = self._positions.get(symbol, {}).get("name", "")
+        raw_name = pos_name or self._symbol_meta.get(symbol, {}).get("name", "")
         display = f"{raw_name}({symbol})" if raw_name else symbol
 
         budget = int(os.environ.get("MAX_POSITION_SIZE", "1000000").split("#")[0].strip())
@@ -803,11 +805,25 @@ class TradingEngine:
         return False
 
     def _execute_sell(self, symbol: str, price: int, reason: str, entry_price: float) -> bool:
-        with self._positions_lock:
-            pos = self._positions.get(symbol, {})
+       with self._positions_lock:
+            pos = dict(self._positions.get(symbol, {}))
 
-        raw_name = pos.get("name") or self._symbol_meta.get(symbol, {}).get("name", "")
-        display = f"{_normalize_name(raw_name, symbol)}({symbol})" if raw_name else symbol
+        pos_name = pos.get("name", "")
+        meta_name = self._symbol_meta.get(symbol, {}).get("name", "")
+
+        logger.info(
+            f"[SELL-NAME] symbol={symbol} | "
+            f"pos_name={pos_name or '-'} | "
+            f"meta_name={meta_name or '-'}"
+        )
+
+        raw_name = pos_name or meta_name
+        raw_name = _normalize_name(raw_name, symbol)
+
+        if not raw_name:
+            logger.warning(f"[SELL-NAME-MISSING] symbol={symbol} | reason={reason}")
+
+        display = f"{raw_name}({symbol})" if raw_name else symbol
 
         qty = pos.get("qty", 1)
         profit_pct = (price / entry_price - 1) * 100 if entry_price else 0
@@ -892,7 +908,7 @@ class TradingEngine:
         self._watch_symbols = final_symbols
 
         added = [s for s in new_symbols if s not in prev_symbols]
-        removed = [s for s in prev_symbols if s not in new_symbols]
+        removed = [s for s in prev_symbols if s not in final_symbols]
 
         if self._collector:
             self._collector.update_symbols(list(self._watch_symbols))

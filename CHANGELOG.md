@@ -2,6 +2,118 @@
 
 ---
 
+## [2026-05-07]
+
+### 추가
+
+* `engine.py` — `_execute_sell()` 종목명 추적용 디버그 로그 추가
+
+  * 매도 실행 직전 positions 및 `_symbol_meta` 의 종목명 상태 출력
+
+  * 추가 코드:
+
+    ```python
+    logger.info(
+        f"[SELL-NAME] symbol={symbol} | "
+        f"pos_name={pos_name or '-'} | "
+        f"meta_name={meta_name or '-'}"
+    )
+    ```
+
+  * 종목명 최종 생성 실패 시 warning 로그 출력
+
+    ```python
+    logger.warning(
+        f"[SELL-NAME-MISSING] symbol={symbol} | reason={reason}"
+    )
+    ```
+
+---
+
+### 수정
+
+* `engine.py` — `_execute_sell()` positions 조회 방식 안정화
+
+  * 기존:
+
+    ```python
+    with self._positions_lock:
+        pos = self._positions.get(symbol, {})
+    ```
+
+  * 변경:
+
+    ```python
+    with self._positions_lock:
+        pos = dict(self._positions.get(symbol, {}))
+    ```
+
+  * 병렬 처리(ThreadPoolExecutor) 환경에서  
+    다른 스레드의 `positions.pop()` 영향 최소화
+
+---
+
+* `engine.py` — `_execute_sell()` 종목명 생성 구조 개선
+
+  * 기존:
+
+    ```python
+    raw_name = pos.get("name") or self._symbol_meta.get(symbol, {}).get("name", "")
+    display = f"{_normalize_name(raw_name, symbol)}({symbol})" if raw_name else symbol
+    ```
+
+  * 변경:
+
+    ```python
+    pos_name = pos.get("name", "")
+    meta_name = self._symbol_meta.get(symbol, {}).get("name", "")
+
+    raw_name = pos_name or meta_name
+    raw_name = _normalize_name(raw_name, symbol)
+
+    display = f"{raw_name}({symbol})" if raw_name else symbol
+    ```
+
+  * 종목명 source를 분리하여 추적 가능하도록 개선
+
+---
+
+### 설계 변경
+
+* 매도 알림 종목명 생성 과정 추적 강화
+
+  * 기존:
+
+    * 종목명 누락 발생 시 원인 확인 어려움
+    * positions / `_symbol_meta` 중 어느 경로가 비어있는지 확인 불가
+
+  * 변경:
+
+    * positions 기반 종목명
+    * `_symbol_meta` 기반 종목명
+    * 최종 display 생성 결과
+
+    를 각각 추적 가능하도록 로그 구조 개선
+
+---
+
+### 효과
+
+* `종목: 092790` 형태의 종목명 누락 원인 분석 가능
+* 병렬 매도 처리 중 positions 참조 안정성 향상
+* 매도 알림 종목명 생성 경로 추적 가능
+* 향후 legacy 포지션 데이터 문제 분석 용이
+
+---
+
+### 주의사항
+
+* INFO/WARNING 로그 증가 가능
+* 장중 매도 빈도가 많을 경우 로그량 증가 가능
+* 원인 분석 완료 후 DEBUG 레벨 전환 권장
+
+---
+
 ## [2026-04-30]
 
 ### 추가

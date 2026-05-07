@@ -403,9 +403,12 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         # ── 공통 가드: 현재가가 EMA20 위에 있어야 매수 가능 ──
         # 공통 가드
+        """
         if energy["score"] < 40:
             return {"signal": "HOLD", "reason": "에너지부족", "energy": energy}
-
+        """
+        # 에너지 조건은 에너지 전략에만 사용
+        energy_filter_ok = energy["score"] >= 40
         if close <= ema20_curr:
             return {"signal": None, "reason": "", "energy": energy}        
 
@@ -427,7 +430,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         # [조건0-B] VCP 고점수 + 5분봉 에너지 응축 돌파
         # ──────────────────────────────────────────────
-        if is_vcp_high and is_energy_breakout:
+        if is_vcp_high and energy_filter_ok and is_energy_breakout:
             logger.debug(
                 f"🥇 [VCP최우선-B] VCP점수:{daily_vcp_score} | "
                 f"에너지점수:{energy['score']}"

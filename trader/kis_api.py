@@ -332,6 +332,56 @@ def get_prev_day_snapshot(symbol: str) -> Optional[dict]:
         "candles_5m": candles_5m,
     }
 
+    # ── 직전 거래일 조회 ──────────────────────────────────
+def _fetch_holiday_output(query_date: str) -> list:
+    """CTCA0903R 호출 → output 리스트 반환. 실패 시 빈 리스트."""
+    res = _url_fetch(
+        "/uapi/domestic-stock/v1/quotations/chk-holiday",
+        "CTCA0903R", "",
+        {"BASS_DT": query_date, "CTX_AREA_FK": "", "CTX_AREA_NK": ""},
+    )
+    if not res.isOK():
+        return []
+    output = res.getBody().output
+    return output if isinstance(output, list) else [output]
+
+
+def get_prev_trading_date(base_date: str) -> str:
+    """
+    CTCA0903R로 base_date 기준 달력을 조회해
+    base_date 이전 가장 최근 거래일(opnd_yn=Y)을 반환.
+    당월에 없으면 전월 달력을 추가 조회 (월초 공휴일 연속 대응).
+    실패 시 빈 문자열 반환.
+    """
+    def _extract_trading_days(output: list) -> list:
+        return [
+            str(row.get("bass_dt", "") or "").strip()
+            for row in output
+            if str(row.get("bass_dt", "") or "").strip() < base_date
+            and str(row.get("opnd_yn", "") or "").strip().upper() == "Y"
+        ]
+
+    # 당월 조회
+    output = _fetch_holiday_output(base_date)
+    trading_days = _extract_trading_days(output)
+
+    # 당월에 없으면 전월 추가 조회
+    if not trading_days:
+        base_dt = datetime.strptime(base_date, "%Y%m%d")
+        prev_month_date = (base_dt.replace(day=1) - timedelta(days=1)).strftime("%Y%m%d")
+        logger.info(f"[거래일조회] 당월 거래일 없음 → 전월 조회 ({prev_month_date})")
+        output = _fetch_holiday_output(prev_month_date)
+        trading_days = _extract_trading_days(output)
+
+    if not trading_days:
+        logger.warning(f"[거래일조회] {base_date} 이전 거래일 없음")
+        return ""
+
+    prev = max(trading_days)
+    logger.info(f"[거래일조회] 직전 거래일={prev} (기준={base_date})")
+    return prev
+
+
     # ── 전일 1분봉 조회 함수 ──────────────────────────────
 def get_prev_day_1min_candles(symbol: str) -> List[List[Any]]:
     """
@@ -341,12 +391,13 @@ def get_prev_day_1min_candles(symbol: str) -> List[List[Any]]:
     """
     kst = timezone(timedelta(hours=9))
     now_kst = datetime.now(timezone.utc).astimezone(kst)
+    today = now_kst.strftime("%Y%m%d")
 
-    # 전일 날짜 계산 (주말 건너뜀)
-    prev_dt = now_kst - timedelta(days=1)
-    while prev_dt.weekday() >= 5:
-        prev_dt -= timedelta(days=1)
-    prev_date = prev_dt.strftime("%Y%m%d")
+    # 직전 거래일 계산 (공휴일 포함 정확히 건너뜀)
+    prev_date = get_prev_trading_date(today)
+    if not prev_date:
+        logger.warning(f"[전일1분봉] {symbol} 직전 거래일 조회 실패")
+        return []
 
     times = ["153000", "133000", "113000", "093000"]
     logger.info(f"[전일1분봉] {symbol} prev_date={prev_date}, times={times}")
