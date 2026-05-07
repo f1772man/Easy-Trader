@@ -805,7 +805,7 @@ class TradingEngine:
         return False
 
     def _execute_sell(self, symbol: str, price: int, reason: str, entry_price: float) -> bool:
-       with self._positions_lock:
+        with self._positions_lock:            
             pos = dict(self._positions.get(symbol, {}))
 
         pos_name = pos.get("name", "")
