@@ -79,10 +79,27 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "ma5ConsecBars":    4,
     "dayHighDropLimit": 0.03,
 
-    # [8] VCP
+    # [8] GC + 전고돌파 추격 진입 방지
+    # 시간대가 늦어질수록 이격/당일 상승률 기준을 더 엄격하게 적용
+    "gcBreakoutGuard": {
+        "enabled": True,
+        "volumeKeepRatio": 0.8,
+        "maxDistanceFromEma5Pct": {
+            "until0930": 4.5,
+            "until1000": 3.5,
+            "after1000": 2.5,
+        },
+        "maxDayRisePct": {
+            "until0930": 15.0,
+            "until1000": 12.0,
+            "after1000": 8.0,
+        },
+    },
+
+    # [9] VCP
     "vcpEarlyEntry": True,
 
-    # [9] 1분봉 구간 기반 빠른 매도
+    # [10] 1분봉 구간 기반 빠른 매도
     "fastExit1m": {
         "enabled": True,
         "excludeFirstBarInBucket": True,
@@ -91,7 +108,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "needConsecutiveWeakClose": True,
     },
 
-    # [10] priceIndex
+    # [11] priceIndex
     "priceIndex": {
         "time":   PriceIndex.TIME,
         "open":   PriceIndex.OPEN,
@@ -479,11 +496,62 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 return {"signal": "HOLD", "reason": "돌파폭부족", "energy": energy}
 
             # ──────────────────────────────────────────────
-            # [3] 이격 과열 차단
+            # [3] 후반 추격 진입 방지 가드
+            #   - 거래량 감소 돌파 차단
+            #   - 시간대별 EMA5 이격 과열 차단
+            #   - 시간대별 당일 상승률 과열 차단
             # ──────────────────────────────────────────────
-            dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
-            if dist_from_ema5 > cfg.get("maxDistanceFromEma5Pct", 3.0):
-                return {"signal": "HOLD", "reason": "이격과열", "energy": energy}
+            guard_cfg = cfg.get("gcBreakoutGuard", {}) or {}
+            guard_enabled = guard_cfg.get("enabled", True)
+
+            if guard_enabled:
+                # [3-A] 거래량 지속성 확인
+                prev_volume = data[i - 1][pi["volume"]] if i > 0 else 0
+                volume_keep_ratio = guard_cfg.get("volumeKeepRatio", 0.8)
+
+                volume_keep_ok = (
+                    prev_volume > 0
+                    and volume >= prev_volume * volume_keep_ratio
+                )
+
+                if not volume_keep_ok:
+                    return {"signal": "HOLD", "reason": "돌파거래량감소", "energy": energy}
+
+                # [3-B] 시간대별 EMA5 이격 과열 차단
+                dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
+                dist_cfg = guard_cfg.get("maxDistanceFromEma5Pct", {}) or {}
+                max_ema5_dist = (
+                    dist_cfg.get("until0930", 4.5) if hm_int <= 930 else
+                    dist_cfg.get("until1000", 3.5) if hm_int <= 1000 else
+                    dist_cfg.get("after1000", 2.5)
+                )
+
+                if dist_from_ema5 > max_ema5_dist:
+                    return {"signal": "HOLD", "reason": "이격과열", "energy": energy}
+
+                # [3-C] 시간대별 당일 상승률 과열 차단
+                day_open = None
+                for k in range(i + 1):
+                    if str(data[k][pi["time"]]).split("_")[0] == today:
+                        day_open = data[k][pi["open"]]
+                        break
+
+                day_rise_pct = ((close / day_open) - 1) * 100 if day_open else 0
+                day_rise_cfg = guard_cfg.get("maxDayRisePct", {}) or {}
+                max_day_rise_pct = (
+                    day_rise_cfg.get("until0930", 15.0) if hm_int <= 930 else
+                    day_rise_cfg.get("until1000", 12.0) if hm_int <= 1000 else
+                    day_rise_cfg.get("after1000", 8.0)
+                )
+
+                if day_rise_pct > max_day_rise_pct:
+                    return {"signal": "HOLD", "reason": "당일과열추격차단", "energy": energy}
+
+            else:
+                # 하위 호환: 가드 비활성화 시 기존 단일 이격 기준 사용
+                dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
+                if dist_from_ema5 > cfg.get("maxDistanceFromEma5Pct", 3.0):
+                    return {"signal": "HOLD", "reason": "이격과열", "energy": energy}
 
             # ──────────────────────────────────────────────
             # [4] 확인봉 (핵심)

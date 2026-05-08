@@ -2,6 +2,154 @@
 
 ---
 
+## [2026-05-09]
+
+### 수정
+
+* `strategy.py` — 조건1 `GC+전고돌파확인` 거래량 지속성 필터 추가
+
+  * 기존:
+
+    * 돌파 확인봉만 유지되면 진입 가능
+    * 거래량 감소 상태의 돌파도 매수 허용
+
+  * 변경:
+
+    * 직전봉 대비 거래량 유지 여부 확인 추가
+
+    ```python
+    prev_volume = data[i - 1][pi["volume"]] if i > 0 else 0
+
+    volume_keep_ok = (
+        prev_volume > 0
+        and volume >= prev_volume * 0.8
+    )
+
+    if not volume_keep_ok:
+        return {
+            "signal": "HOLD",
+            "reason": "돌파거래량감소",
+            "energy": energy
+        }
+    ```
+
+  * 거래량 감소 상태의 후반 돌파 추격 진입 차단
+
+---
+
+* `strategy.py` — 조건1 `GC+전고돌파확인` EMA5 이격 과열 제한 강화
+
+  * 기존:
+
+    ```python
+    if dist_from_ema5 > cfg.get("maxDistanceFromEma5Pct", 3.0):
+    ```
+
+  * 변경:
+
+    * 시간대별 EMA5 이격 허용 범위 차등 적용
+
+    ```python
+    max_ema5_dist = (
+        4.5 if hm_int <= 930 else
+        3.5 if hm_int <= 1000 else
+        2.5
+    )
+
+    if dist_from_ema5 > max_ema5_dist:
+        return {
+            "signal": "HOLD",
+            "reason": "이격과열",
+            "energy": energy
+        }
+    ```
+
+  * 장초반 강한 추세는 허용하면서
+    후반 과열 추격 진입 차단
+
+---
+
+* `strategy.py` — 조건1 `GC+전고돌파확인` 장중 상승률 과열 차단 추가
+
+  * 신규 추가:
+
+    ```python
+    day_rise_pct = (
+        ((close / day_open) - 1) * 100
+        if day_open else 0
+    )
+
+    max_day_rise_pct = (
+        15 if hm_int <= 930 else
+        12 if hm_int <= 1000 else
+        8
+    )
+
+    if day_rise_pct > max_day_rise_pct:
+        return {
+            "signal": "HOLD",
+            "reason": "당일과열추격차단",
+            "energy": energy
+        }
+    ```
+
+  * 이미 큰 폭 상승한 종목의 후반 재추격 매수 차단
+
+---
+
+### 설계 변경
+
+* `GC+전고돌파확인` 전략 구조 개선
+
+  * 기존:
+
+    * 돌파 발생 여부 중심
+    * Breakout 자체를 진입 신호로 사용
+
+  * 변경:
+
+    * 돌파 위치
+    * 거래량 지속성
+    * EMA5 과열 여부
+    * 장중 상승 과열 상태
+
+    를 함께 평가하는 구조로 변경
+
+---
+
+### 효과
+
+* 후반 추격 매수 감소
+* 거래량 감소 돌파 실패 구간 차단
+* EMA5 과열 구간 진입 감소
+* 장중 고점 부근 재진입 감소
+* `GC+전고돌파확인` 조건 손절 빈도 감소 기대
+
+---
+
+### 주의사항
+
+* 초기 급등 종목 일부 진입 누락 가능
+* 장초반 강한 모멘텀 종목은 시간대별 완화 기준으로 일부 허용
+* 진입 빈도 감소는 정상 동작
+* 수익보다 손실 감소 및 체결 품질 개선 목적의 수정
+
+---
+
+### 분석 기반
+
+* `휴온스글로벌(084110)` 2026-05-08 5분봉 데이터 분석 기반 적용
+* 주요 손실 패턴:
+
+  * 후반 돌파 추격
+  * 거래량 감소 상태 돌파
+  * EMA5 과열 구간 진입
+  * 장중 +10% 이상 상승 후 재진입
+
+* 로그 기준 `GC+전고돌파확인` 조건 손실 비중이 높아 우선 수정 적용
+
+---
+
 ## [2026-05-07]
 
 ### 추가
