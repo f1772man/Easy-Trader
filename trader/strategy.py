@@ -99,6 +99,22 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # [9] VCP
     "vcpEarlyEntry": True,
 
+    # [9-A] 매수 품질 필터 — 에너지 점수
+    # 실제 5분봉 검증 결과, 에너지 점수는 응축/돌파형 조건에만 적용한다.
+    # 거래량폭발/GC/1분봉 EMA 골든은 추세 지속형 조건이므로 에너지 필터 대상에서 제외한다.
+    "buyEnergyFilter": {
+        "enabled": True,
+        "minBars": 48,
+        "vcpBreakout": 45,
+        "vcpSqueezeGc": 45,
+        "gcBreakout": 0,
+        "prevHighBreakout": 50,
+        "pivotR2": 55,
+        "volumeExplosion": 0,
+        "steady1m": 0,
+        "ema1mGolden": 0,
+    },
+
     # [10] 1분봉 구간 기반 빠른 매도
     "fastExit1m": {
         "enabled": True,
@@ -424,8 +440,27 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         if energy["score"] < 40:
             return {"signal": "HOLD", "reason": "에너지부족", "energy": energy}
         """
-        # 에너지 조건은 에너지 전략에만 사용
-        energy_filter_ok = energy["score"] >= 40
+        # 매수 품질 필터: 에너지 점수는 VCP/피봇/전일고가 같은 응축·돌파형 조건에만 적용
+        # threshold <= 0 이면 해당 매수조건은 에너지 필터를 사용하지 않는다.
+        energy_filter_cfg = cfg.get("buyEnergyFilter", {}) or {}
+        energy_filter_enabled = energy_filter_cfg.get("enabled", True)
+        energy_min_bars = energy_filter_cfg.get("minBars", 48)
+
+        def _energy_buy_ok(key: str) -> bool:
+            if not energy_filter_enabled:
+                return True
+            threshold = energy_filter_cfg.get(key, 40)
+            if threshold <= 0:
+                return True
+            if i < energy_min_bars:
+                return True
+            return energy.get("score", 0) >= threshold
+
+        def _energy_hold_reason(key: str) -> str:
+            threshold = energy_filter_cfg.get(key, 40)
+            return f"에너지부족({energy.get('score', 0)}<{threshold})"
+
+        energy_filter_ok = _energy_buy_ok("vcpBreakout")
         if close <= ema20_curr:
             return {"signal": None, "reason": "", "energy": energy}        
 
@@ -434,6 +469,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         if (is_vcp_breakout_strategy and is_vcp_high
                 and is_pivot_breakout and is_vol_explosion):
+            if not _energy_buy_ok("vcpBreakout"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("vcpBreakout"), "energy": energy}
             logger.debug(
                 f"🏆 [VCP최우선-A] VCP점수:{daily_vcp_score} | "
                 f"Pivot:{daily_pivot_point} | 현재가:{close}"
@@ -466,6 +503,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 and is_vcp_squeeze_strategy and is_vcp_medium
                 and has_recent_golden_cross and is_within_gc_window
                 and is_swing_breakout):
+            if not _energy_buy_ok("vcpSqueezeGc"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("vcpSqueezeGc"), "energy": energy}
             logger.debug(
                 f"🥈 [VCP조기진입] VCP점수:{daily_vcp_score} | GC+전고돌파"
             )
@@ -569,6 +608,9 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             if not prev_breakout:
                 return {"signal": "HOLD", "reason": "돌파확인대기", "energy": energy}
 
+            if not _energy_buy_ok("gcBreakout"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("gcBreakout"), "energy": energy}
+
             tag = f"+VCP{daily_vcp_score}" if is_vcp_medium else ""
             return {"signal": "BUY", "reason": f"GC+전고돌파확인{tag}", "energy": energy}        
         
@@ -602,6 +644,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         if (ph_time_ok and is_bull_candle and is_fresh_prev_high_breakout
                 and trend_ok and vol_ok and close_strong_enough
                 and body_ratio_ok and trade_value_ok):
+            if not _energy_buy_ok("prevHighBreakout"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("prevHighBreakout"), "energy": energy}
             return {"signal": "BUY", "reason": "전일고가돌파", "energy": energy}
 
         # ──────────────────────────────────────────────
@@ -617,6 +661,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                     f"ema5_prev2:{ema5_prev2} | ema5_prev:{ema5_prev} | ema5_curr:{ema5_curr}"
                 )
                 return {"signal": "HOLD", "reason": "피봇R2차단(EMA5하락)", "energy": energy}
+            if not _energy_buy_ok("pivotR2"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("pivotR2"), "energy": energy}
             return {"signal": "BUY", "reason": "피봇R2돌파", "energy": energy}
 
         # ──────────────────────────────────────────────
@@ -624,6 +670,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         # ──────────────────────────────────────────────
         if (is_ma_bull and is_vol_explosion and is_gap_up
                 and ma5_up1 and ma5_up2 and ma5_slope_ok and price_above_ma5):
+            if not _energy_buy_ok("volumeExplosion"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("volumeExplosion"), "energy": energy}
             if not trailing_reentry_price_ok:
                 pct = (close / trailing_exit_price - 1) * 100
                 return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
@@ -646,6 +694,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             and price_above_ma5
             and volume > avg_vol * 5
         ):
+            if not _energy_buy_ok("steady1m"):
+                return {"signal": "HOLD", "reason": _energy_hold_reason("steady1m"), "energy": energy}
             if not trailing_reentry_price_ok:
                 pct = (close / trailing_exit_price - 1) * 100
                 return {"signal": "HOLD", "reason": f"트레일링재진입차단(+{pct:.1f}%)", "energy": energy}
@@ -678,6 +728,8 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             )
 
             if ema_cross and vol_explosion:
+                if not _energy_buy_ok("ema1mGolden"):
+                    return {"signal": "HOLD", "reason": _energy_hold_reason("ema1mGolden"), "energy": energy}
                 return {
                     "signal": "BUY",
                     "reason": "1분봉EMA골든+거래량폭발",

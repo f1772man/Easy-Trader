@@ -1,5 +1,133 @@
 # CHANGELOG
 
+## [2026-05-13]
+
+### 설계 변경
+
+* 종목 선정 아키텍처 전면 개편
+
+  * 기존:
+
+    * `daily-candles-job` → `strategy_results` 생성 → `target_stocks` 저장
+    * `engine.py` 시작 시 `target_stocks` 읽기 → `watch_symbols` 구성 → 매매 시작
+
+  * 변경:
+
+    * `daily-candles-job` → `strategy_results` 생성만 수행 (`target_stocks` 저장 제거)
+    * `engine.py` 09:05~09:10 → `strategy_results` 전체 조회 → 거래대금 + 갭 조건 필터 → 상위 10개 선정 → `target_stocks` 저장 → `watch_symbols` 구성 → 매매 시작
+
+---
+
+### 추가
+
+* `engine.py` — `_filter_by_trade_amount()` 함수 신규 추가
+
+  * 실행 시점:
+    * 09:05~09:10 자동 실행 (하루 1회)
+    * 09:10 이후 미완료 시 즉시 실행 (폴백)
+    * 엔진 재시작 시 `tr_pbmn_date == today` 이고 `tr_pbmn > 0` 이면 재조회 없이 복원
+
+  * 처리 흐름:
+    1. `strategy_results` 전체 읽기 (`summaryBadge == '진입'` 조건)
+    2. KIS API(`FHKST01010100`) 호출 — 현재가 + 시가 + 전일종가 + 누적 거래대금 수집
+    3. 갭 조건 필터 적용:
+       * 시가갭 `1.0% ~ 15.0%`
+       * 현재갭 `>= 0.5%`
+       * 현재가 >= 시가 (갭 유지)
+    4. 거래대금 내림차순 정렬 → 상위 10개 선정
+    5. 기존 `target_stocks` 전체 삭제 후 신규 저장
+    6. `_warmup_market_data()` 호출
+    7. `watch_symbols` 교체
+    8. 텔레그램 알림 (종목명, 거래대금, 시가갭 포함)
+
+* `engine.py` — `_trade_filter_done: bool` 클래스 변수 추가
+
+  * 당일 거래대금 필터 완료 여부 관리
+  * 재시작 시 `target_stocks`의 `tr_pbmn_date`, `tr_pbmn` 필드로 자동 복원
+
+* `kis_api.py` — `get_trade_amount()` 함수 추가
+
+  * `FHKST01010100` API에서 현재가 + 누적 거래대금(`acml_tr_pbmn`) 반환
+  * 반환: `{'price': int, 'tr_pbmn': int}`
+
+---
+
+### 수정
+
+* `engine.py` — `start()` 초기화 구조 변경
+
+  * 기존: 시작 시 `_reload_watch_symbols()` + `_warmup_market_data()` 호출 → `WsTickCollector` 시작
+  * 변경: `WsTickCollector([])` 빈 리스트로 시작 → `_filter_by_trade_amount()` 완료 후 `watch_symbols` 구성
+
+* `engine.py` — `_maybe_premarket_warmup()` 구조 변경
+
+  * 기존: 워밍업 전 `_reload_watch_symbols()` 호출
+  * 변경: `_reload_watch_symbols()` 제거 → `_warmup_market_data()`만 수행
+
+* `engine.py` — `_load_target_symbols_with_meta()` 재시작 복원 로직 추가
+
+  * `tr_pbmn_date == today` 이고 `tr_pbmn > 0` 인 종목 감지 시 `_trade_filter_done = True` 복원
+  * 거래대금 필터 완료 시 `tr_pbmn_rank` 기준 정렬
+  * 미완료 시 기존 `score` 기준 정렬 유지
+
+* `engine.py` — `_tick()` 거래대금 필터 트리거 추가
+
+  ```python
+  # 09:05~09:10 자동 실행
+  if not self._trade_filter_done and 905 <= hm <= 910:
+      self._filter_by_trade_amount()
+
+  # 09:10 이후 폴백
+  if not self._trade_filter_done and hm > 910:
+      self._filter_by_trade_amount()
+  ```
+
+* `candles/main.py` — `_build_target_stocks()` 호출 제거
+
+  * 기존: `strategy_results` 생성 후 `_build_target_stocks()` 호출하여 `target_stocks` 저장
+  * 변경: `strategy_results` 생성만 수행, `target_stocks` 저장은 `engine.py`에서 처리
+
+---
+
+### 저장 필드 변경
+
+* `target_stocks` 컬렉션 신규 저장 필드:
+
+  | 필드 | 내용 |
+  |------|------|
+  | `tr_pbmn` | 당일 누적 거래대금 |
+  | `tr_pbmn_rank` | 거래대금 순위 (1~10) |
+  | `tr_pbmn_at` | 조회 시각 (HH:MM) |
+  | `tr_pbmn_date` | 조회 날짜 (YYYYMMDD) — 재시작 복원 판단용 |
+  | `gap_pct` | 시가갭 (%) |
+  | `current_pct` | 현재갭 (%) |
+
+---
+
+### 효과
+
+* 장 시작 후 실제 수급(거래대금)과 갭 상승 여부를 동시에 반영한 종목 선정
+* 예상 거래대금(장전 추정) 대신 실제 거래대금(09:05~09:10) 기준으로 정확도 향상
+* 갭 하락 또는 갭 유지 실패 종목 자동 제외
+* 엔진 재시작 시 재조회 없이 당일 선정 결과 자동 복원
+
+---
+
+### 주의사항
+
+* 09:05 이전 매매 신호 없음 (watch_symbols 비어있음)
+* `strategy_results`에 `summaryBadge == '진입'` 종목이 없으면 필터 실패
+* 갭 조건 기준 (`GAP_MIN_PCT=1.0`, `GAP_MAX_PCT=15.0`, `CURRENT_MIN_PCT=0.5`) 은 시장 상황에 따라 조정 필요
+* API 호출 수 = `strategy_results` 진입 후보 수 × 0.2초 — 종목 수에 따라 소요 시간 증가
+
+---
+
+### Cloud Run 변경
+
+* `premarket-filter` Cloud Run Scheduler 비활성화
+
+  * 기존 08:58 예상 거래대금 기반 필터 → engine.py 내부 실제 거래대금 기반 필터로 대체
+  * Cloud Run 서비스 코드는 유지 (롤백 대비)
 ---
 
 ## [2026-05-09]

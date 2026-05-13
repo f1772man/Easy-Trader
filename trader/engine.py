@@ -24,7 +24,7 @@ import numpy as np
 
 import trader.kis_api as kis_api
 from trader.ws_tick_collector import WsTickCollector
-from trader.kis_auth import auth
+from trader.kis_auth import auth, _url_fetch
 from trader.strategy import get_strategy_signal, DEFAULT_CONFIG
 from trader.telegram import notify_buy, notify_sell, notify_error
 from trader.firebase import FirebaseClient
@@ -114,6 +114,7 @@ class TradingEngine:
         self._premarket_warmup_done_date = ""
         self._holiday_checked_date: str = ""
         self._today_opnd_yn: str = "Y"
+        self._trade_filter_done: bool = False   # 당일 거래대금 필터 완료 여부
 
         # 주문 중복 방지
         self._order_lock = threading.RLock()
@@ -216,10 +217,9 @@ class TradingEngine:
         self._restore_positions()
 
         self._cache_date = datetime.now(KST).strftime("%Y%m%d")
-        self._reload_watch_symbols()
-        self._warmup_market_data()
 
-        self._collector = WsTickCollector(list(self._watch_symbols))
+        # watch_symbols는 09:05 _filter_by_trade_amount() 완료 후 구성
+        self._collector = WsTickCollector([])
         self._collector.start()
 
         while self.is_running:
@@ -254,6 +254,15 @@ class TradingEngine:
             if hm >= 1531:
                 self._flush_market_data_once(now.strftime("%Y%m%d"))
             return
+
+        # ── 거래대금 필터: 09:05~09:10 자동 실행 (하루 1회) ──
+        if not self._trade_filter_done and 905 <= hm <= 910:
+            self._filter_by_trade_amount()
+
+        # ── 폴백: 09:10 이후에도 미완료 시 즉시 실행 ──────
+        if not self._trade_filter_done and hm > 910:
+            logger.warning("[거래대금필터] 09:10 초과 미완료 → 즉시 실행")
+            self._filter_by_trade_amount()
 
         symbols = [s.strip() for s in self._watch_symbols if s.strip()]
         if not symbols:
@@ -369,13 +378,229 @@ class TradingEngine:
 
         # 2. 워밍업만 재시도
         if self._premarket_warmup_done_date != today_str:
-            logger.info("[장전워밍업] 감시 종목 갱신 후 전일 snapshot + strategy cache 사전 로드")
-            self._reload_watch_symbols()
+            logger.info("[장전워밍업] 전일 snapshot + strategy cache 사전 로드")
             success = self._warmup_market_data()
             if success:
                 self._premarket_warmup_done_date = today_str
             else:
                 logger.warning("[장전워밍업] 일부 실패 → 다음 틱에서 재시도")
+
+    def _filter_by_trade_amount(self):
+        """
+        strategy_results 전체 거래대금 + 갭 조건 조회 → 상위 10개로 watch_symbols 교체
+        - 09:05~09:10 사이 자동 실행 (하루 1회)
+        - 09:10 이후 미완료 시 즉시 실행 (폴백)
+        - 엔진 재시작 시 tr_pbmn_date == today 이면 재조회 없이 복원
+        """
+        import time as _time
+        from trader.telegram import send_telegram
+
+        TOP_N        = 10
+        API_INTERVAL = 0.2   # 초
+        GAP_MIN_PCT  = 1.0   # 시가갭 하한 (%)
+        GAP_MAX_PCT  = 15.0  # 시가갭 상한 (%) — 과열 제외
+        CURRENT_MIN_PCT = 0.5  # 현재갭 하한 (%) — 갭 유지 확인
+
+        now       = datetime.now(KST)
+        today_str = now.strftime("%Y%m%d")
+        now_hm    = now.strftime("%H:%M")
+
+        logger.info(f"[거래대금필터] 시작 ({now_hm}) — strategy_results 전체 조회")
+
+        # ── 1. strategy_results 읽기 (summaryBadge == '진입') ──
+        try:
+            docs = self._fs.collection("strategy_results").stream()
+            candidates = []
+            for doc in docs:
+                data = doc.to_dict()
+                if not data:
+                    continue
+                if data.get("summaryBadge") != "진입":
+                    continue
+                ticker = data.get("code", "").strip()
+                if not ticker:
+                    continue
+                candidates.append({
+                    "ticker":   ticker,
+                    "name":     data.get("name", ticker),
+                    "strategy": "",
+                    "score":    float(data.get("confidence", 0)),
+                })
+        except Exception as e:
+            logger.error(f"[거래대금필터] strategy_results 읽기 실패: {e}")
+            return
+
+        if not candidates:
+            logger.warning("[거래대금필터] strategy_results 진입 후보 없음 → 스킵")
+            return
+
+        logger.info(f"[거래대금필터] {len(candidates)}개 후보 거래대금+갭 조회 시작")
+
+        # ── 2. 거래대금 + 갭 조회 및 필터 ──────────────
+        results    = []
+        fail_count = 0
+        skip_count = 0
+
+        for item in candidates:
+            ticker = item["ticker"]
+            try:
+                res = _url_fetch(
+                    "/uapi/domestic-stock/v1/quotations/inquire-price",
+                    "FHKST01010100", "",
+                    {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": ticker},
+                )
+                _time.sleep(API_INTERVAL)
+
+                if not res.isOK():
+                    fail_count += 1
+                    logger.warning(f"[거래대금필터] {ticker} API 실패 → 제외")
+                    continue
+
+                output = res.getBody().output
+                stck_prpr    = int(output.get("stck_prpr",    0) or 0)
+                stck_oprc    = int(output.get("stck_oprc",    0) or 0)
+                stck_sdpr    = int(output.get("stck_sdpr",    0) or 0)
+                acml_tr_pbmn = int(output.get("acml_tr_pbmn", 0) or 0)
+
+                if stck_sdpr <= 0:
+                    fail_count += 1
+                    continue
+
+                gap_pct     = round((stck_oprc - stck_sdpr) / stck_sdpr * 100, 2)
+                current_pct = round((stck_prpr - stck_sdpr) / stck_sdpr * 100, 2)
+                gap_hold    = stck_prpr >= stck_oprc
+
+                # 갭 조건 필터
+                if gap_pct < GAP_MIN_PCT or gap_pct > GAP_MAX_PCT:
+                    skip_count += 1
+                    continue
+                if current_pct < CURRENT_MIN_PCT:
+                    skip_count += 1
+                    continue
+                if not gap_hold:
+                    skip_count += 1
+                    continue
+
+                item["tr_pbmn"]     = acml_tr_pbmn
+                item["gap_pct"]     = gap_pct
+                item["current_pct"] = current_pct
+                item["price"]       = stck_prpr
+                results.append(item)
+
+            except Exception as e:
+                fail_count += 1
+                logger.warning(f"[거래대금필터] {ticker} 오류: {e} → 제외")
+
+        logger.info(
+            f"[거래대금필터] 조회 완료: {len(results)}개 통과 / "
+            f"{skip_count}개 갭미달 / {fail_count}개 실패"
+        )
+
+        if not results:
+            logger.error("[거래대금필터] 갭 조건 통과 종목 없음 → watch_symbols 유지")
+            self._trade_filter_done = True
+            return
+
+        # ── 3. 거래대금 기준 정렬 → 상위 TOP_N 선정 ────
+        results.sort(key=lambda x: x["tr_pbmn"], reverse=True)
+        selected = results[:TOP_N]
+
+        logger.info(f"[거래대금필터] 상위 {len(selected)}개 선정:")
+        for i, item in enumerate(selected, 1):
+            pbmn_bil = item["tr_pbmn"] / 1e8
+            logger.info(
+                f"  {i}위 {item['name']}({item['ticker']}) "
+                f"| 거래대금 {pbmn_bil:.0f}억 "
+                f"| 시가갭 {item['gap_pct']:+.1f}% "
+                f"| 현재갭 {item['current_pct']:+.1f}%"
+            )
+
+        # ── 4. target_stocks 상위 10개에 거래대금 필드 저장 (merge) ──
+        try:
+            # 기존 target_stocks 전체 삭제
+            existing = self._fs.collection("target_stocks").stream()
+            del_batch = self._fs.batch()
+            del_count = 0
+            for doc in existing:
+                del_batch.delete(doc.reference)
+                del_count += 1
+                if del_count % 400 == 0:
+                    del_batch.commit()
+                    del_batch = self._fs.batch()
+            del_batch.commit()
+            logger.info(f"[거래대금필터] 기존 target_stocks {del_count}개 삭제")
+
+            # 신규 저장
+            batch = self._fs.batch()
+            for i, item in enumerate(selected, 1):
+                ref = self._fs.collection("target_stocks").document(item["ticker"])
+                batch.set(ref, {
+                    "ticker":       item["ticker"],
+                    "name":         item["name"],
+                    "tr_pbmn":      item["tr_pbmn"],
+                    "tr_pbmn_rank": i,
+                    "tr_pbmn_at":   now_hm,
+                    "tr_pbmn_date": today_str,
+                    "gap_pct":      item["gap_pct"],
+                    "current_pct":  item["current_pct"],
+                    "score":        item["score"],
+                })
+            batch.commit()
+            logger.info(f"[거래대금필터] target_stocks {len(selected)}개 저장 완료")
+        except Exception as e:
+            logger.error(f"[거래대금필터] Firestore 저장 실패: {e}")
+
+        # ── 5. watch_symbols 교체 ────────────────────────
+        new_symbols = [item["ticker"] for item in selected]
+
+        # 보유 포지션 강제 편입
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+        for s in holding_symbols:
+            if s not in new_symbols:
+                new_symbols.append(s)
+
+        prev_symbols      = self._watch_symbols[:]
+        self._watch_symbols = new_symbols
+
+        if self._collector:
+            self._collector.update_symbols(list(self._watch_symbols))
+
+        added   = [s for s in new_symbols if s not in prev_symbols]
+        removed = [s for s in prev_symbols if s not in new_symbols]
+
+        # 제거된 종목 캐시 정리
+        with self._snapshot_lock:
+            for sym in removed:
+                self._prev_snapshot_cache.pop(sym, None)
+        with self._strategy_lock:
+            for sym in removed:
+                self._strategy_cache.pop(sym, None)
+        with self._order_lock:
+            for sym in removed:
+                self._inflight_orders.discard(sym)
+                self._last_order_keys.pop(sym, None)
+                self._last_order_ts.pop(sym, None)
+
+        self._trade_filter_done = True
+        logger.info(
+            f"[거래대금필터] watch_symbols 교체 완료: "
+            f"{len(new_symbols)}개 (추가={added}, 제거={removed})"
+        )
+
+        # ── 6. 전일 데이터 워밍업 ────────────────────────
+        self._warmup_market_data()
+
+        # ── 7. 텔레그램 알림 ─────────────────────────────
+        lines = [f"💹 <b>거래대금 기준 종목 선정 완료</b> ({now_hm})"]
+        for i, item in enumerate(selected, 1):
+            pbmn_bil = item["tr_pbmn"] / 1e8
+            lines.append(
+                f"{i}위 {item['name']}({item['ticker']}) "
+                f"| {pbmn_bil:.0f}억 "
+                f"| 시가갭 {item['gap_pct']:+.1f}%"
+            )
+        send_telegram("\n".join(lines))
 
     def _flush_market_data_once(self, date_str: str):
         if self._last_flush_date == date_str:
@@ -860,21 +1085,44 @@ class TradingEngine:
     # ── 감시 목록 로드 ────────────────────────────────
     def _load_target_symbols_with_meta(self) -> tuple[list[str], dict]:
         try:
+            today_str = datetime.now(KST).strftime("%Y%m%d")
             docs = self._fs.collection("target_stocks").stream()  # ✅ 공유 클라이언트
             items, meta = [], {}
+            trade_filter_done_count = 0
+
             for doc in docs:
                 data = doc.to_dict()
                 if not data:
                     continue
-                ticker = data.get("ticker", "").strip()
-                score = float(data.get("score", 0))
-                name = data.get("name", ticker)
+                ticker   = data.get("ticker", "").strip()
+                score    = float(data.get("score", 0))
+                name     = data.get("name", ticker)
                 strategy = data.get("strategy", "-")
+
+                # 엔진 재시작 시: tr_pbmn_date == today 이고 tr_pbmn > 0 이면 거래대금 필터 완료
+                if data.get("tr_pbmn_date") == today_str and int(data.get("tr_pbmn", 0) or 0) > 0:
+                    trade_filter_done_count += 1
+
                 if ticker:
-                    items.append((ticker, score))
+                    # 거래대금 필터 완료된 경우 tr_pbmn_rank 기준 정렬
+                    tr_pbmn_rank = data.get("tr_pbmn_rank", 9999)
+                    items.append((ticker, score, tr_pbmn_rank))
                     meta[ticker] = {"name": name, "strategy": strategy, "score": score}
-            items.sort(key=lambda x: x[1], reverse=True)
-            symbols = [t for t, _ in items]
+
+            # 거래대금 필터 완료 여부 복원
+            if trade_filter_done_count > 0 and not self._trade_filter_done:
+                self._trade_filter_done = True
+                logger.info(
+                    f"[target_stocks] 재시작 감지: 거래대금 필터 완료 이력 확인 "
+                    f"({trade_filter_done_count}개) → _trade_filter_done=True"
+                )
+                # tr_pbmn_rank 기준 정렬 (거래대금 필터 완료 시)
+                items.sort(key=lambda x: x[2])
+            else:
+                # score 기준 정렬 (거래대금 필터 미완료 시)
+                items.sort(key=lambda x: x[1], reverse=True)
+
+            symbols = [t for t, _, _ in items]
             logger.info(f"[target_stocks] {len(symbols)}개 로드")
             return symbols, meta
         except Exception as e:

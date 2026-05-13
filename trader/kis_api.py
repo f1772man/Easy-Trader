@@ -217,6 +217,33 @@ def get_current_price(symbol: str) -> Optional[int]:
         return None
 
 
+# ── 당일 누적 거래대금 조회 ──────────────────────────────
+def get_trade_amount(symbol: str) -> Optional[dict]:
+    """
+    당일 누적 거래대금 + 현재가 조회
+    반환: {'price': int, 'tr_pbmn': int}
+    실패 시 None
+    """
+    res = _url_fetch(
+        "/uapi/domestic-stock/v1/quotations/inquire-price",
+        "FHKST01010100", "",
+        {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": symbol},
+    )
+    if not res.isOK():
+        logger.warning(f"[거래대금] {symbol} API 실패")
+        return None
+    try:
+        output = getattr(res.getBody(), "output", None)
+        if not output:
+            return None
+        price   = int(getattr(output, "stck_prpr",   0) or 0)
+        tr_pbmn = int(getattr(output, "acml_tr_pbmn", 0) or 0)
+        return {"price": price, "tr_pbmn": tr_pbmn}
+    except Exception as e:
+        logger.error(f"[거래대금] {symbol} 파싱 실패: {e}")
+        return None
+
+
 # ── 매수 주문 (페이퍼 트레이딩) ─────────────────────────
 def buy_order(symbol: str, qty: int, price: int = 0) -> Optional[dict]:
     """실제 주문 없이 로그/기록만 남김 (페이퍼 트레이딩 모드)"""

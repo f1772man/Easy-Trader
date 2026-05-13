@@ -1,0 +1,1093 @@
+2026-05-12 08:50:04 [WARNING] trader.kis_auth - 토큰 만료 임박(남은시간 < 10분). 재인증을 수행합니다.
+2026-05-12 08:50:07 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:50:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:50:09 [INFO] trader.kis_auth - ✅ Firestore 토큰 재사용 (만료: 2026-05-12T23:28:11.835941+00:00)
+2026-05-12 08:50:12 [INFO] trader.engine - [휴장일조회] 20260512 opnd_yn=Y
+2026-05-12 08:50:12 [INFO] trader.engine - [장전워밍업] 감시 종목 갱신 후 전일 snapshot + strategy cache 사전 로드
+2026-05-12 08:50:13 [INFO] trader.engine - [target_stocks] 10개 로드
+2026-05-12 08:50:13 [INFO] trader.ws_tick_collector - [WS] 감시목록 증분 반영 | 추가=['000660', '003720', '042700', '078520', '080580', '095610', '098120', '278470', '319660', '356860'] | 제거=['003000', '003230', '005440', '011760', '013030', '015750', '083650', '094970', '161390', '340440']
+2026-05-12 08:50:13 [INFO] trader.engine - [워밍업] 14종목 전일 snapshot + strategy_results 로드
+2026-05-12 08:50:14 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:14 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:14 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:14 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:14 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:15 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:15 [INFO] trader.kis_api - [전일1분봉] 278470 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:15 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:15 [INFO] trader.kis_api - [전일1분봉] 080580 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:15 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:15 [INFO] trader.kis_api - [전일1분봉] 000660 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:15 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:15 [INFO] trader.kis_api - [전일1분봉] 356860 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:15 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:15 [INFO] trader.kis_api - [전일1분봉] 095610 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:16 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:17 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] 080580 prev_date=20260511, candles_1m=381
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:18 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] 000660 prev_date=20260511, candles_1m=381
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] 356860 prev_date=20260511, candles_1m=380
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] 278470 prev_date=20260511, candles_1m=381
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:19 [INFO] trader.kis_api - [전일1분봉] 095610 prev_date=20260511, candles_1m=379
+2026-05-12 08:50:19 [INFO] trader.engine - [워밍업] 오킨스전자(080580) snapshot=OK | strategy=OK
+2026-05-12 08:50:19 [INFO] trader.engine - [워밍업] SK하이닉스(000660) snapshot=OK | strategy=OK
+2026-05-12 08:50:19 [INFO] trader.engine - [워밍업] 티엘비(356860) snapshot=OK | strategy=OK
+2026-05-12 08:50:19 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:20 [INFO] trader.engine - [워밍업] 에이피알(278470) snapshot=OK | strategy=OK
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:20 [INFO] trader.engine - [워밍업] 테스(095610) snapshot=OK | strategy=OK
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:20 [INFO] trader.kis_api - [전일1분봉] 098120 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:20 [INFO] trader.kis_api - [전일1분봉] 078520 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:20 [INFO] trader.kis_api - [전일1분봉] 319660 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:20 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:21 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] 042700 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:21 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] 003720 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:21 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:22 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] 098120 prev_date=20260511, candles_1m=375
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] 078520 prev_date=20260511, candles_1m=357
+2026-05-12 08:50:23 [INFO] trader.engine - [워밍업] 마이크로컨텍솔(098120) snapshot=OK | strategy=OK
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:23 [INFO] trader.kis_api - [전일1분봉] 319660 prev_date=20260511, candles_1m=381
+2026-05-12 08:50:24 [INFO] trader.engine - [워밍업] 에이블씨엔씨(078520) snapshot=OK | strategy=OK
+2026-05-12 08:50:24 [INFO] trader.engine - [워밍업] 피에스케이(319660) snapshot=OK | strategy=OK
+2026-05-12 08:50:24 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:24 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:24 [INFO] trader.kis_api - [전일1분봉] 003720 prev_date=20260511, candles_1m=381
+2026-05-12 08:50:24 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:24 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:24 [INFO] trader.engine - [워밍업] 삼영(003720) snapshot=OK | strategy=OK
+2026-05-12 08:50:24 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:24 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:24 [INFO] trader.kis_api - [전일1분봉] 042700 prev_date=20260511, candles_1m=381
+2026-05-12 08:50:24 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:24 [INFO] trader.engine - [워밍업] 한미반도체(042700) snapshot=OK | strategy=OK
+2026-05-12 08:50:25 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:25 [INFO] trader.kis_api - [전일1분봉] 012510 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:25 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:25 [INFO] trader.kis_api - [전일1분봉] 214430 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:25 [INFO] trader.kis_api - [거래일조회] 당월 거래일 없음 → 전월 조회 (20260430)
+2026-05-12 08:50:25 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:25 [INFO] trader.kis_api - [전일1분봉] 019180 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:25 [INFO] trader.kis_api - [거래일조회] 직전 거래일=20260511 (기준=20260512)
+2026-05-12 08:50:25 [INFO] trader.kis_api - [전일1분봉] 214180 prev_date=20260511, times=['153000', '133000', '113000', '093000']
+2026-05-12 08:50:25 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:25 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=153000, isOK=True
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=153000, raw=120건
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:26 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=133000, isOK=True
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=133000, raw=120건
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:27 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=113000, isOK=True
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=113000, raw=120건
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] 012510 prev_date=20260511, candles_1m=211
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] 214430 prev_date=20260511, candles_1m=371
+2026-05-12 08:50:28 [INFO] trader.engine - [워밍업] 더존비즈온(012510) snapshot=OK | strategy=OK
+2026-05-12 08:50:28 [INFO] trader.engine - [워밍업] 아이쓰리시스템(214430) snapshot=OK | strategy=OK
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:28 [INFO] trader.kis_api - [전일1분봉] 214180 prev_date=20260511, candles_1m=361
+2026-05-12 08:50:29 [INFO] trader.kis_api - [전일1분봉] t=093000, isOK=True
+2026-05-12 08:50:29 [INFO] trader.kis_api - [전일1분봉] t=093000, raw=120건
+2026-05-12 08:50:29 [INFO] trader.kis_api - [전일1분봉] 019180 prev_date=20260511, candles_1m=351
+2026-05-12 08:50:29 [INFO] trader.engine - [워밍업] 헥토이노베이션(214180) snapshot=OK | strategy=OK
+2026-05-12 08:50:29 [INFO] trader.engine - [워밍업] 티에이치엔(019180) snapshot=OK | strategy=OK
+2026-05-12 08:50:29 [INFO] trader.engine - [워밍업] 완료 — 성공:14 / 실패:0
+2026-05-12 08:50:29 [INFO] trader.engine - [감시목록] 14개 | 추가=['278470', '095610', '356860', '000660', '080580', '098120', '078520', '319660', '042700', '003720'] | 제거=['013030', '083650', '161390', '011760', '094970', '003230', '005440', '015750', '340440', '003000']
+2026-05-12 08:50:30 [INFO] trader.engine - [워밍업] 모든 종목 캐시 존재 → 스킵
+2026-05-12 08:50:37 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:50:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:51:08 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:51:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:51:38 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:51:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:52:08 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:52:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:52:38 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:52:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:53:09 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:53:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:53:39 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:53:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:54:09 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:54:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:54:40 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:54:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:55:10 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:55:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:55:40 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:55:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:56:10 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:56:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:56:40 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:56:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:57:11 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:57:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:57:41 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:57:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:58:11 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:58:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:58:42 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:58:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:59:12 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:59:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 08:59:42 [INFO] werkzeug - 127.0.0.1 - - [11/May/2026 23:59:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:00:05 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 214180 21350원 20260512_0900
+2026-05-12 09:00:06 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 000660 1944000원 20260512_0900
+2026-05-12 09:00:08 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 042700 397500원 20260512_0900
+2026-05-12 09:00:08 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 080580 26850원 20260512_0900
+2026-05-12 09:00:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:00:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:00:16 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 319660 112600원 20260512_0900
+2026-05-12 09:00:20 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 095610 108300원 20260512_0900
+2026-05-12 09:00:22 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 214430 96500원 20260512_0900
+2026-05-12 09:00:22 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 278470 441000원 20260512_0900
+2026-05-12 09:00:25 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 098120 38250원 20260512_0900
+2026-05-12 09:00:26 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 019180 7930원 20260512_0900
+2026-05-12 09:00:27 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 356860 101500원 20260512_0900
+2026-05-12 09:00:27 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 003720 13480원 20260512_0900
+2026-05-12 09:00:30 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 012510 120000원 20260512_0900
+2026-05-12 09:00:30 [INFO] trader.ws_tick_collector - [WS] 첫 체결 수신: 078520 14100원 20260512_0900
+2026-05-12 09:00:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:00:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:01:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:01:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:01:13 [INFO] trader.engine - [손절대기] 아이쓰리시스템(214430) | 봉=20260512_0901 → 다음 1분봉 종가 확인 예정
+2026-05-12 09:01:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:01:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:02:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:02:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:02:15 [INFO] trader.engine - [손절확정] 아이쓰리시스템(214430) | 종가:93600 | 수익:-2.40%
+2026-05-12 09:02:15 [INFO] trader.engine - [SELL-NAME] symbol=214430 | pos_name=아이쓰리시스템 | meta_name=-
+2026-05-12 09:02:15 [INFO] trader.engine - [SELL][214430] 아이쓰리시스템(214430) price=93600 qty=10 profit=-2.40% reason=손절대기
+2026-05-12 09:02:15 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 214430 10주 @ 93,600원
+2026-05-12 09:02:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:02:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:03:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:03:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:03:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:03:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:04:06 [INFO] trader.engine - [BUY][319660] 피에스케이(319660) price=116100 qty=8 reason=전일고가돌파
+2026-05-12 09:04:06 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 319660 8주 @ 116,100원
+2026-05-12 09:04:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:04:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:04:44 [INFO] trader.engine - [SELL-NAME] symbol=019180 | pos_name=티에이치엔 | meta_name=-
+2026-05-12 09:04:44 [INFO] trader.engine - [SELL][019180] 티에이치엔(019180) price=8000 qty=129 profit=3.23% reason=트레일링(시작3.00%, 되돌림1.50%↓)
+2026-05-12 09:04:44 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 019180 129주 @ 8,000원
+2026-05-12 09:04:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:04:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:05:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:05:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:05:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:05:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:06:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:06:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:06:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:06:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:07:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:07:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:07:29 [INFO] trader.engine - [BUY][042700] 한미반도체(042700) price=407000 qty=2 reason=거래량폭발(2.1배)+시가대비상승+MA5상승(연속)
+2026-05-12 09:07:29 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 042700 2주 @ 407,000원
+2026-05-12 09:07:36 [INFO] trader.engine - [BUY][019180] 019180 price=8070 qty=123 reason=거래량폭발(2.0배)+시가대비상승+MA5상승(연속)
+2026-05-12 09:07:36 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 019180 123주 @ 8,070원
+2026-05-12 09:07:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:07:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:08:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:08:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:08:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:08:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:09:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:09:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:09:21 [INFO] trader.engine - [BUY][098120] 마이크로컨텍솔(098120) price=38950 qty=25 reason=거래량폭발(2.2배)+시가대비상승+MA5상승(연속)
+2026-05-12 09:09:21 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 098120 25주 @ 38,950원
+2026-05-12 09:09:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:09:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:10:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:10:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:10:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:10:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:11:09 [INFO] trader.engine - [손절대기] 피에스케이(319660) | 봉=20260512_0911 → 다음 1분봉 종가 확인 예정
+2026-05-12 09:11:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:11:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:11:30 [INFO] trader.engine - [손절대기] 마이크로컨텍솔(098120) | 봉=20260512_0911 → 다음 1분봉 종가 확인 예정
+2026-05-12 09:11:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:11:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:12:16 [INFO] trader.engine - [손절확정] 마이크로컨텍솔(098120) | 종가:38100 | 수익:-2.18%
+2026-05-12 09:12:16 [INFO] trader.engine - [SELL-NAME] symbol=098120 | pos_name=마이크로컨텍솔 | meta_name=마이크로컨텍솔
+2026-05-12 09:12:16 [INFO] trader.engine - [SELL][098120] 마이크로컨텍솔(098120) price=38100 qty=25 profit=-2.18% reason=손절대기
+2026-05-12 09:12:16 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 098120 25주 @ 38,100원
+2026-05-12 09:12:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:12:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:12:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:12:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:13:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:13:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:13:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:13:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:14:05 [INFO] trader.engine - [재매수방지] 마이크로컨텍솔(098120) → 쿨다운 중, 스킵
+2026-05-12 09:14:10 [INFO] trader.engine - [재매수방지] 마이크로컨텍솔(098120) → 쿨다운 중, 스킵
+2026-05-12 09:14:15 [INFO] trader.engine - [재매수방지] 마이크로컨텍솔(098120) → 쿨다운 중, 스킵
+2026-05-12 09:14:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:14:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:14:21 [INFO] trader.engine - [BUY][098120] 마이크로컨텍솔(098120) price=38950 qty=25 reason=거래량폭발(2.1배)+시가대비상승+MA5상승(연속)
+2026-05-12 09:14:21 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 098120 25주 @ 38,950원
+2026-05-12 09:14:21 [INFO] trader.engine - [손절대기] 헥토이노베이션(214180) | 봉=20260512_0914 → 다음 1분봉 종가 확인 예정
+2026-05-12 09:14:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:14:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:15:13 [INFO] trader.engine - [손절확정] 헥토이노베이션(214180) | 종가:20500 | 수익:-2.15%
+2026-05-12 09:15:13 [INFO] trader.engine - [SELL-NAME] symbol=214180 | pos_name=헥토이노베이션 | meta_name=-
+2026-05-12 09:15:13 [INFO] trader.engine - [SELL][214180] 헥토이노베이션(214180) price=20500 qty=47 profit=-2.15% reason=손절대기
+2026-05-12 09:15:13 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 214180 47주 @ 20,500원
+2026-05-12 09:15:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:15:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:15:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:15:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:16:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:16:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:16:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:16:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:17:12 [INFO] trader.engine - [손절대기] 마이크로컨텍솔(098120) | 봉=20260512_0917 → 다음 1분봉 종가 확인 예정
+2026-05-12 09:17:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:17:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:17:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:17:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:18:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:18:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:18:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:18:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:19:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:19:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:19:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:19:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:20:06 [INFO] trader.engine - [손절확정] 마이크로컨텍솔(098120) | 종가:38150 | 수익:-2.05%
+2026-05-12 09:20:06 [INFO] trader.engine - [SELL-NAME] symbol=098120 | pos_name=마이크로컨텍솔 | meta_name=마이크로컨텍솔
+2026-05-12 09:20:06 [INFO] trader.engine - [SELL][098120] 마이크로컨텍솔(098120) price=38150 qty=25 profit=-2.05% reason=손절대기
+2026-05-12 09:20:06 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 098120 25주 @ 38,150원
+2026-05-12 09:20:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:20:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:20:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:20:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:21:10 [INFO] trader.engine - [SELL-NAME] symbol=042700 | pos_name=한미반도체 | meta_name=한미반도체
+2026-05-12 09:21:10 [INFO] trader.engine - [SELL][042700] 한미반도체(042700) price=418500 qty=2 profit=2.83% reason=트레일링(시작3.00%, 되돌림1.50%↓)
+2026-05-12 09:21:10 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 042700 2주 @ 418,500원
+2026-05-12 09:21:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:21:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:21:27 [INFO] trader.engine - [손절확정] 피에스케이(319660) | 종가:113700 | 수익:-2.07%
+2026-05-12 09:21:27 [INFO] trader.engine - [SELL-NAME] symbol=319660 | pos_name=피에스케이 | meta_name=피에스케이
+2026-05-12 09:21:27 [INFO] trader.engine - [SELL][319660] 피에스케이(319660) price=113700 qty=8 profit=-2.07% reason=손절대기
+2026-05-12 09:21:27 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 319660 8주 @ 113,700원
+2026-05-12 09:21:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:21:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:22:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:22:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:22:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:22:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:23:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:23:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:23:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:23:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:24:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:24:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:24:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:24:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:25:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:25:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:25:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:25:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:26:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:26:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:26:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:26:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:27:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:27:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:27:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:27:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:28:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:28:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:28:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:28:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:29:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:29:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:29:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:29:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:30:12 [INFO] trader.engine - [BUY][042700] 한미반도체(042700) price=413500 qty=2 reason=피봇R2돌파
+2026-05-12 09:30:12 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 042700 2주 @ 413,500원
+2026-05-12 09:30:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:30:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:30:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:30:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:31:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:31:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:31:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:31:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:32:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:32:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:33:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:33:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:33:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:33:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:34:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:34:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:34:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:34:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:35:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:35:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:35:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:35:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:36:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:36:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:36:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:36:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:37:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:37:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:37:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:37:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:38:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:38:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:38:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:38:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:39:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:39:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:39:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:39:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:40:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:40:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:40:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:40:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:41:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:41:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:41:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:41:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:42:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:42:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:42:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:42:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:43:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:43:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:43:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:43:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:44:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:44:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:44:11 [INFO] trader.engine - [SELL-NAME] symbol=019180 | pos_name=- | meta_name=-
+2026-05-12 09:44:11 [WARNING] trader.engine - [SELL-NAME-MISSING] symbol=019180 | reason=트레일링(시작3.00%, 되돌림1.50%↓)
+2026-05-12 09:44:11 [INFO] trader.engine - [SELL][019180] 019180 price=8230 qty=123 profit=1.98% reason=트레일링(시작3.00%, 되돌림1.50%↓)
+2026-05-12 09:44:11 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 019180 123주 @ 8,230원
+2026-05-12 09:44:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:44:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:45:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:45:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:45:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:45:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:46:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:46:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:46:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:46:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:47:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:47:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:47:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:47:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:48:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:48:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:48:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:48:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:49:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:49:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:49:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:49:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:50:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:50:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:50:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:50:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:51:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:51:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:51:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:51:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:52:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:52:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:52:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:52:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:53:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:53:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:53:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:53:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:54:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:54:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:54:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:54:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:55:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:55:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:55:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:55:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:56:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:56:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:56:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:56:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:57:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:57:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:57:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:57:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:58:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:58:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:58:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:58:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:59:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:59:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 09:59:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 00:59:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:00:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:00:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:00:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:00:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:01:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:01:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:01:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:01:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:02:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:02:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:02:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:02:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:03:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:03:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:03:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:03:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:04:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:04:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:04:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:04:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:05:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:05:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:05:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:05:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:06:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:06:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:06:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:06:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:07:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:07:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:07:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:07:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:08:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:08:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:08:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:08:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:09:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:09:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:09:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:09:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:10:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:10:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:10:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:10:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:11:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:11:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:11:32 [INFO] trader.engine - [BUY][078520] 에이블씨엔씨(078520) price=14370 qty=69 reason=GC+전고돌파확인
+2026-05-12 10:11:32 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 078520 69주 @ 14,370원
+2026-05-12 10:11:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:11:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:12:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:12:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:12:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:12:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:13:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:13:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:13:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:13:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:14:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:14:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:14:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:14:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:15:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:15:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:15:31 [INFO] trader.engine - [손절대기] 한미반도체(042700) | 봉=20260512_1015 → 다음 1분봉 종가 확인 예정
+2026-05-12 10:15:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:15:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:16:06 [INFO] trader.engine - [손절확정] 한미반도체(042700) | 종가:405000 | 수익:-2.06%
+2026-05-12 10:16:06 [INFO] trader.engine - [SELL-NAME] symbol=042700 | pos_name=한미반도체 | meta_name=한미반도체
+2026-05-12 10:16:06 [INFO] trader.engine - [SELL][042700] 한미반도체(042700) price=405000 qty=2 profit=-2.06% reason=손절대기
+2026-05-12 10:16:06 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 042700 2주 @ 405,000원
+2026-05-12 10:16:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:16:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:16:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:16:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:17:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:17:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:17:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:17:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:18:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:18:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:18:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:18:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:19:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:19:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:19:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:19:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:20:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:20:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:20:57 [INFO] trader.engine - [SELL-NAME] symbol=078520 | pos_name=에이블씨엔씨 | meta_name=에이블씨엔씨
+2026-05-12 10:20:57 [INFO] trader.engine - [SELL][078520] 에이블씨엔씨(078520) price=14650 qty=69 profit=1.95% reason=트레일링(시작3.00%, 되돌림1.50%↓)
+2026-05-12 10:20:57 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 078520 69주 @ 14,650원
+2026-05-12 10:20:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:20:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:21:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:21:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:21:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:21:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:22:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:22:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:22:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:22:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:23:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:23:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:23:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:23:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:24:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:24:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:24:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:24:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:25:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:25:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:26:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:26:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:26:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:26:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:27:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:27:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:27:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:27:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:28:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:28:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:28:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:28:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:29:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:29:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:29:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:29:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:30:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:30:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:30:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:30:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:31:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:31:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:31:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:31:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:32:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:32:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:32:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:32:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:33:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:33:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:33:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:33:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:34:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:34:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:34:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:34:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:35:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:35:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:35:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:35:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:36:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:36:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:36:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:36:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:37:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:37:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:37:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:37:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:38:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:38:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:38:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:38:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:39:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:39:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:39:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:39:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:40:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:40:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:40:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:40:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:41:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:41:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:41:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:41:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:42:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:42:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:42:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:42:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:43:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:43:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:43:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:43:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:44:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:44:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:44:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:44:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:45:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:45:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:45:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:45:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:46:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:46:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:46:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:46:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:47:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:47:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:47:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:47:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:48:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:48:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:48:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:48:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:49:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:49:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:49:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:49:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:50:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:50:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:50:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:50:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:51:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:51:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:51:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:51:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:52:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:52:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:52:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:52:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:53:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:53:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:53:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:53:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:54:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:54:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:54:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:54:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:55:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:55:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:55:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:55:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:56:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:56:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:56:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:56:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:57:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:57:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:57:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:57:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:58:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:58:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:58:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:58:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:59:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:59:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 10:59:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 01:59:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:00:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:00:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:00:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:00:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:01:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:01:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:01:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:01:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:02:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:02:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:02:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:02:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:03:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:03:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:03:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:03:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:04:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:04:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:04:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:04:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:05:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:05:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:05:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:05:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:06:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:06:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:06:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:06:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:07:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:07:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:07:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:07:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:08:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:08:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:08:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:08:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:09:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:09:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:09:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:09:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:10:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:10:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:10:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:10:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:11:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:11:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:11:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:11:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:12:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:12:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:12:33 [INFO] trader.engine - [BUY][078520] 에이블씨엔씨(078520) price=14640 qty=68 reason=GC+전고돌파확인
+2026-05-12 11:12:33 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 078520 68주 @ 14,640원
+2026-05-12 11:12:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:12:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:13:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:13:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:13:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:13:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:14:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:14:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:14:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:14:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:15:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:15:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:15:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:15:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:16:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:16:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:16:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:16:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:17:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:17:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:17:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:17:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:18:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:18:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:18:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:18:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:19:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:19:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:19:36 [INFO] trader.engine - [BUY][095610] 테스(095610) price=111300 qty=8 reason=GC+전고돌파확인
+2026-05-12 11:19:36 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 095610 8주 @ 111,300원
+2026-05-12 11:19:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:19:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:20:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:20:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:21:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:21:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:21:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:21:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:22:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:22:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:22:17 [INFO] trader.engine - [BUY][356860] 티엘비(356860) price=99400 qty=10 reason=GC+전고돌파확인
+2026-05-12 11:22:17 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 356860 10주 @ 99,400원
+2026-05-12 11:22:30 [INFO] trader.engine - [BUY][098120] 마이크로컨텍솔(098120) price=37300 qty=26 reason=GC+전고돌파확인
+2026-05-12 11:22:30 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 098120 26주 @ 37,300원
+2026-05-12 11:22:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:22:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:23:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:23:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:23:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:23:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:24:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:24:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:24:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:24:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:25:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:25:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:25:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:25:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:25:41 [INFO] trader.engine - [손절대기] 티엘비(356860) | 봉=20260512_1125 → 다음 1분봉 종가 확인 예정
+2026-05-12 11:26:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:26:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:26:17 [INFO] trader.engine - [손절확정] 티엘비(356860) | 종가:97400 | 수익:-2.01%
+2026-05-12 11:26:17 [INFO] trader.engine - [SELL-NAME] symbol=356860 | pos_name=티엘비 | meta_name=티엘비
+2026-05-12 11:26:17 [INFO] trader.engine - [SELL][356860] 티엘비(356860) price=97400 qty=10 profit=-2.01% reason=손절대기
+2026-05-12 11:26:17 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 356860 10주 @ 97,400원
+2026-05-12 11:26:24 [INFO] trader.engine - [BUY][278470] 에이피알(278470) price=422000 qty=2 reason=GC+전고돌파확인
+2026-05-12 11:26:24 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 278470 2주 @ 422,000원
+2026-05-12 11:26:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:26:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:27:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:27:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:27:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:27:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:28:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:28:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:28:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:28:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:29:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:29:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:29:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:29:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:30:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:30:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:30:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:30:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:31:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:31:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:31:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:31:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:32:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:32:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:32:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:32:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:33:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:33:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:33:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:33:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:34:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:34:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:34:34 [INFO] trader.engine - [BUY][080580] 오킨스전자(080580) price=24500 qty=40 reason=1분봉EMA골든+거래량폭발
+2026-05-12 11:34:34 [INFO] trader.kis_api - 📝 [페이퍼] 매수 기록: 080580 40주 @ 24,500원
+2026-05-12 11:34:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:34:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:35:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:35:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:35:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:35:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:36:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:36:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:36:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:36:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:37:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:37:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:37:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:37:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:38:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:38:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:38:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:38:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:39:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:39:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:39:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:39:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:40:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:40:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:40:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:40:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:41:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:41:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:41:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:41:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:42:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:42:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:42:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:42:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:43:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:43:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:43:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:43:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:44:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:44:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:44:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:44:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:45:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:45:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:45:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:45:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:46:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:46:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:46:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:46:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:47:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:47:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:47:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:47:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:48:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:48:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:48:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:48:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:49:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:49:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:49:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:49:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:50:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:50:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:50:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:50:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:51:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:51:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:51:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:51:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:52:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:52:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:52:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:52:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:53:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:53:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:53:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:53:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:54:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:54:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:54:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:54:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:55:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:55:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:55:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:55:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:56:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:56:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:56:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:56:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:57:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:57:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:57:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:57:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:58:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:58:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:58:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:58:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:59:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:59:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 11:59:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 02:59:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:00:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:00:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:00:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:00:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:01:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:01:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:01:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:01:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:02:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:02:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:02:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:02:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:03:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:03:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:03:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:03:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:04:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:04:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:04:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:04:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:05:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:05:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:05:40 [INFO] trader.engine - [손절대기] 에이블씨엔씨(078520) | 봉=20260512_1205 → 다음 1분봉 종가 확인 예정
+2026-05-12 12:05:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:05:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:06:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:06:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:06:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:06:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:07:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:07:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:07:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:07:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:08:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:08:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:08:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:08:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:09:00 [INFO] trader.engine - [SELL-NAME] symbol=278470 | pos_name=에이피알 | meta_name=에이피알
+2026-05-12 12:09:00 [INFO] trader.engine - [SELL][278470] 에이피알(278470) price=416000 qty=2 profit=-1.42% reason=EMA데드크로스확정(이격0.11%)
+2026-05-12 12:09:00 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 278470 2주 @ 416,000원
+2026-05-12 12:09:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:09:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:09:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:09:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:10:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:10:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:11:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:11:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:11:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:11:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:12:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:12:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:12:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:12:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:13:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:13:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:13:04 [INFO] trader.engine - [손절확정] 에이블씨엔씨(078520) | 종가:14330 | 수익:-2.12%
+2026-05-12 12:13:04 [INFO] trader.engine - [SELL-NAME] symbol=078520 | pos_name=에이블씨엔씨 | meta_name=에이블씨엔씨
+2026-05-12 12:13:04 [INFO] trader.engine - [SELL][078520] 에이블씨엔씨(078520) price=14330 qty=68 profit=-2.12% reason=손절대기
+2026-05-12 12:13:04 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 078520 68주 @ 14,330원
+2026-05-12 12:13:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:13:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:14:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:14:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:14:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:14:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:15:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:15:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:15:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:15:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:16:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:16:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:16:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:16:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:17:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:17:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:17:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:17:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:18:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:18:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:18:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:18:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:19:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:19:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:19:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:19:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:20:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:20:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:20:28 [INFO] trader.engine - [SELL-NAME] symbol=080580 | pos_name=오킨스전자 | meta_name=오킨스전자
+2026-05-12 12:20:28 [INFO] trader.engine - [SELL][080580] 오킨스전자(080580) price=24300 qty=40 profit=-0.82% reason=EMA데드크로스확정(이격0.11%)
+2026-05-12 12:20:28 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 080580 40주 @ 24,300원
+2026-05-12 12:20:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:20:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:21:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:21:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:21:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:21:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:22:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:22:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:22:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:22:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:23:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:23:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:23:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:23:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:24:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:24:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:24:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:24:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:25:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:25:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:25:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:25:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:26:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:26:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:26:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:26:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:27:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:27:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:27:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:27:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:28:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:28:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:28:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:28:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:29:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:29:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:29:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:29:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:30:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:30:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:30:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:30:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:31:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:31:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:31:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:31:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:32:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:32:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:32:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:32:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:33:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:33:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:33:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:33:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:34:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:34:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:34:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:34:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:35:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:35:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:35:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:35:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:36:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:36:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:36:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:36:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:37:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:37:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:37:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:37:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:38:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:38:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:38:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:38:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:39:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:39:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:39:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:39:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:40:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:40:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:40:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:40:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:41:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:41:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:41:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:41:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:42:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:42:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:42:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:42:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:43:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:43:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:43:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:43:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:44:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:44:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:44:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:44:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:45:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:45:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:45:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:45:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:46:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:46:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:46:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:46:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:47:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:47:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:47:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:47:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:48:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:48:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:48:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:48:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:49:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:49:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:49:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:49:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:50:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:50:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:50:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:50:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:51:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:51:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:51:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:51:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:52:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:52:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:52:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:52:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:53:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:53:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:53:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:53:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:54:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:54:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:54:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:54:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:55:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:55:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:55:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:55:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:56:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:56:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:56:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:56:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:57:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:57:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:57:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:57:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:58:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:58:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:58:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:58:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:59:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:59:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 12:59:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 03:59:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:00:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:00:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:00:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:00:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:01:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:01:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:01:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:01:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:02:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:02:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:02:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:02:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:03:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:03:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:03:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:03:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:04:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:04:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:04:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:04:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:05:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:05:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:05:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:05:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:06:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:06:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:06:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:06:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:07:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:07:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:08:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:08:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:08:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:08:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:09:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:09:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:09:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:09:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:10:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:10:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:10:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:10:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:10:37 [INFO] trader.engine - [SELL-NAME] symbol=095610 | pos_name=테스 | meta_name=테스
+2026-05-12 13:10:37 [INFO] trader.engine - [SELL][095610] 테스(095610) price=110700 qty=8 profit=-0.54% reason=EMA데드크로스확정(이격0.10%)
+2026-05-12 13:10:37 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 095610 8주 @ 110,700원
+2026-05-12 13:11:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:11:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:11:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:11:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:12:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:12:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:12:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:12:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:13:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:13:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:13:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:13:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:14:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:14:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:14:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:14:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:15:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:15:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:15:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:15:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:16:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:16:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:16:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:16:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:17:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:17:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:17:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:17:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:18:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:18:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:18:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:18:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:19:03 [INFO] trader.engine - [SELL-NAME] symbol=098120 | pos_name=마이크로컨텍솔 | meta_name=마이크로컨텍솔
+2026-05-12 13:19:03 [INFO] trader.engine - [SELL][098120] 마이크로컨텍솔(098120) price=37050 qty=26 profit=-0.67% reason=EMA데드크로스확정(이격0.10%)
+2026-05-12 13:19:03 [INFO] trader.kis_api - 📝 [페이퍼] 매도 기록: 098120 26주 @ 37,050원
+2026-05-12 13:19:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:19:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:19:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:19:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:20:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:20:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:20:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:20:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:21:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:21:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:21:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:21:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:22:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:22:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:22:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:22:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:23:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:23:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:23:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:23:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:24:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:24:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:24:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:24:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:25:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:25:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:25:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:25:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:26:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:26:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:26:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:26:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:27:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:27:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:27:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:27:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:28:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:28:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:28:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:28:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:29:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:29:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:29:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:29:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:30:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:30:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:30:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:30:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:31:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:31:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:31:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:31:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:32:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:32:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:32:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:32:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:33:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:33:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:33:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:33:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:34:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:34:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:34:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:34:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:35:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:35:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:35:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:35:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:36:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:36:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:36:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:36:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:37:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:37:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:37:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:37:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:38:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:38:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:38:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:38:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:39:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:39:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:39:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:39:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:40:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:40:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:40:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:40:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:41:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:41:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:41:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:41:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:42:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:42:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:42:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:42:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:43:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:43:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:43:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:43:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:44:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:44:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:44:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:44:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:45:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:45:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:45:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:45:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:46:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:46:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:46:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:46:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:47:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:47:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:47:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:47:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:48:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:48:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:48:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:48:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:49:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:49:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:49:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:49:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:50:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:50:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:50:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:50:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:51:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:51:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:51:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:51:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:52:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:52:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:52:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:52:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:53:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:53:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:53:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:53:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:54:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:54:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:54:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:54:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:55:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:55:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:55:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:55:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:56:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:56:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:56:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:56:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:57:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:57:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:57:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:57:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:58:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:58:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:58:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:58:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:59:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:59:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 13:59:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 04:59:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:00:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:00:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:00:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:00:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:01:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:01:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:01:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:01:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:02:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:02:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:02:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:02:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:03:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:03:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:03:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:03:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:04:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:04:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:05:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:05:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:05:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:05:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:06:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:06:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:06:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:06:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:07:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:07:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:07:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:07:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:08:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:08:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:08:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:08:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:09:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:09:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:09:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:09:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:10:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:10:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:10:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:10:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:11:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:11:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:11:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:11:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:12:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:12:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:12:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:12:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:13:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:13:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:13:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:13:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:14:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:14:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:14:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:14:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:15:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:15:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:15:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:15:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:16:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:16:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:16:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:16:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:17:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:17:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:17:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:17:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:18:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:18:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:18:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:18:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:19:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:19:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:19:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:19:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:20:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:20:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:20:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:20:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:21:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:21:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:21:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:21:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:22:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:22:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:22:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:22:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:23:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:23:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:23:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:23:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:24:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:24:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:24:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:24:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:25:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:25:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:25:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:25:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:26:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:26:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:26:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:26:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:27:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:27:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:27:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:27:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:28:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:28:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:28:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:28:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:29:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:29:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:29:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:29:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:30:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:30:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:30:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:30:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:31:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:31:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:31:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:31:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:32:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:32:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:32:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:32:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:33:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:33:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:33:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:33:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:34:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:34:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:34:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:34:45] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:35:15 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:35:15] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:35:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:35:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:36:16 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:36:16] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:36:46 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:36:46] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:37:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:37:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:37:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:37:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:38:17 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:38:17] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:38:47 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:38:47] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:39:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:39:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:39:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:39:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:40:18 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:40:18] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:40:48 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:40:48] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:41:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:41:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:41:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:41:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:42:19 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:42:19] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:42:49 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:42:49] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:43:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:43:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:43:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:43:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:44:20 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:44:20] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:44:50 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:44:50] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:45:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:45:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:45:51 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:45:51] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:46:21 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:46:21] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:46:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:46:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:47:22 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:47:22] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:47:52 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:47:52] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:48:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:48:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:48:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:48:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:49:23 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:49:23] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:49:53 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:49:53] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:50:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:50:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:50:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:50:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:51:24 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:51:24] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:51:54 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:51:54] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:52:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:52:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:52:55 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:52:55] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:53:25 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:53:25] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:53:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:53:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:54:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:54:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:54:56 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:54:56] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:55:26 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:55:26] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:55:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:55:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:56:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:56:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:56:57 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:56:57] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:57:27 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:57:27] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:57:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:57:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:58:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:58:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:58:58 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:58:58] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:59:28 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:59:28] "GET /health HTTP/1.1" 200 -
+2026-05-12 14:59:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 05:59:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:00:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:00:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:00:59 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:00:59] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:01:29 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:01:29] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:02:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:02:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:02:30 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:02:30] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:03:00 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:03:00] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:03:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:03:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:04:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:04:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:04:31 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:04:31] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:05:01 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:05:01] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:05:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:05:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:06:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:06:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:06:32 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:06:32] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:07:02 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:07:02] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:07:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:07:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:08:03 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:08:03] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:08:33 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:08:33] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:09:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:09:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:09:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:09:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:10:04 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:10:04] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:10:34 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:10:34] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:11:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:11:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:11:35 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:11:35] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:12:05 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:12:05] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:12:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:12:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:13:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:13:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:13:36 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:13:36] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:14:06 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:14:06] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:14:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:14:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:15:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:15:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:15:37 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:15:37] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:16:07 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:16:07] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:16:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:16:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:17:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:17:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:17:38 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:17:38] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:18:08 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:18:08] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:18:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:18:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:19:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:19:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:19:39 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:19:39] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:20:09 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:20:09] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:20:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:20:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:21:10 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:21:10] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:21:40 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:21:40] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:22:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:22:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:22:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:22:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:23:11 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:23:11] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:23:41 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:23:41] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:24:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:24:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:24:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:24:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:25:12 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:25:12] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:25:42 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:25:42] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:26:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:26:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:26:43 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:26:43] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:27:13 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:27:13] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:27:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:27:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:28:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:28:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:28:44 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:28:44] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:29:14 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:29:14] "GET /health HTTP/1.1" 200 -
+2026-05-12 15:29:45 [INFO] werkzeug - 127.0.0.1 - - [12/May/2026 06:29:45] "GET /health HTTP/1.1" 200 -
