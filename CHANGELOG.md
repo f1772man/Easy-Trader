@@ -1,5 +1,549 @@
 # CHANGELOG
 
+---
+
+## [2026-05-14]
+
+### 제거
+
+* `strategy.py` — 매수 조건 4개 제거 (10개 → 6개)
+
+  * 제거 이유: 오늘 5분봉 데이터 분석 결과, 손실이 집중된 조건과 조건 철학이 중복되는 조건 정리
+
+  | 제거 조건 | 이유 |
+  |-----------|------|
+  | 조건0-B `VCP고점수+에너지돌파` | 조건0-A(`VCP돌파+Pivot`)와 중복 |
+  | 조건0-C `VCP응축+GC전고` | 조건1(`GC+전고돌파`)과 철학 중복 |
+  | 조건3 `피봇R2돌파` | 오늘 2건 전부 손절(-2.60%, -2.63%), 이론적 저항선 신뢰도 낮음 |
+  | 조건5-A `1분봉EMA골든+거래량폭발` | 5분봉 엔진과 타임프레임 불일치, 오늘 발화 없음 |
+
+* 남은 매수 조건 (6개):
+
+  1. `VCP돌파+Pivot` (조건0-A)
+  2. `GC+전고돌파확인` (조건1)
+  3. `전일고가돌파` (조건2)
+  4. `거래량폭발+MA5` (조건4)
+  5. `1분봉지속상승` (조건5)
+  6. `에너지응축돌파` (조건6)
+
+---
+
+### 수정
+
+* `strategy.py` — 조건2 `전일고가돌파` 확인봉 추가
+
+  * 기존:
+
+    * 현재봉이 처음 breakout_line을 돌파하면 즉시 BUY
+    * 갭 상승 직후 첫 봉이 전일고가를 잠깐 넘었다가 되돌아오는 패턴에 취약
+
+    ```python
+    is_fresh_prev_high_breakout = (
+        prev_close is not None
+        and prev_close <= breakout_line
+        and close > breakout_line
+    )
+    ```
+
+  * 변경:
+
+    * 2봉 전은 breakout_line 아래, 직전봉이 이미 위에 있어야 진입 허용
+    * 오늘 115500 손절 케이스 차단 가능
+
+    ```python
+    prev_close_2 = data[i - 2][pi["close"]] if i >= 2 else None
+    is_fresh_prev_high_breakout = (
+        prev_close is not None
+        and prev_close_2 is not None
+        and prev_close_2 <= breakout_line   # 2봉 전은 돌파 전
+        and prev_close > breakout_line       # 직전봉이 확인봉
+        and close > breakout_line            # 현재봉도 유지
+    )
+    ```
+
+---
+
+* `strategy.py` — 공통 가드에 진입봉 변동폭 과대 차단 추가
+
+  * 기존:
+
+    * 당일상승률·EMA5이격·EMA20이격만 체크
+    * 진입봉 자체의 변동폭이 크더라도 통과
+
+  * 변경:
+
+    * `(high - low) / close * 100 > maxBarRangePct(기본 3.5%)` 시 차단
+    * 장대양봉 고점 추격 진입 방지
+
+    ```python
+    bar_range_pct = (high - low) / close * 100 if close > 0 else 0
+    max_bar_range_pct = guard_cfg.get("maxBarRangePct", 3.5)
+    if bar_range_pct > max_bar_range_pct:
+        return {"signal": "HOLD", "reason": f"진입봉과대({bar_range_pct:.1f}%>{max_bar_range_pct:.1f}%)", "energy": energy}
+    ```
+
+  * 오늘 분석 기준:
+
+    * 072950 진입봉 변동폭 4.4% → 차단
+    * 417840 진입봉 변동폭 4.7% → 차단
+    * 322000·064400(익절) 진입봉 변동폭 2~3%대 → 통과
+
+---
+
+* `engine.py` — `_process_symbol()` 손절대기 로직 제거
+
+  * 기존:
+
+    * `reason == "손절대기"` 시 다음 1분봉 종가 확인 후 매도
+    * `_stop_loss_pending` 딕셔너리로 대기 상태 관리
+
+  * 변경:
+
+    * 손절 신호 발생 즉시 `current_price`로 매도
+    * 대기 로직 제거로 코드 단순화
+
+---
+
+### 설계 변경
+
+* 매수 조건 단순화 방향 확립
+
+  * 기존: 10개 조건 (VCP 3개, GC, 전일고가, 피봇R2, 거래량폭발, 1분봉지속, 1분봉EMA, 에너지응축)
+  * 변경: 6개 조건으로 축소 — 서로 다른 철학의 조건 혼재 해소
+
+* 진입 품질 필터 방향 전환
+
+  * 기존: 직전 3봉 응축(tightRange) 중심
+  * 변경: 진입봉 변동폭 + 확인봉 중심
+  * 근거: 오늘 5분봉 분석 결과 손절 5건 중 4건이 tightRange 통과 — 응축이 아닌 진입봉 품질이 문제였음
+
+---
+
+### 효과
+
+* 장대양봉 고점 추격 진입 차단
+* 전일고가 일시 돌파 후 되돌림 손절 감소
+* 피봇R2 허위 신호 제거
+* 매수 조건 구조 단순화로 신호 일관성 향상
+
+---
+
+### 주의사항
+
+* 전일고가돌파 확인봉 조건으로 인해 진입 타이밍 1봉 지연 (정상 동작)
+* 진입봉 변동폭 3.5% 기준은 시장 상황에 따라 조정 필요
+  * 변동성이 큰 날에는 4.0%로 완화 검토
+* 손절 즉시 실행으로 전환 — 되돌림 후 회복 종목 일부 조기 청산 가능
+
+---
+
+### 분석 기반
+
+* 2026-05-14 실거래 로그 + 5분봉 데이터 (14개 종목) 분석
+* 손절 6건 분석 결과:
+
+  | 종목 | 조건 | 진입봉 변동폭 | tightRange | 결과 |
+  |------|------|--------------|-----------|------|
+  | 115500 | 전일고가돌파 | 1.0% | ✅ 통과 | -2.79% |
+  | 417840 | 전일고가돌파 | 4.7% | ✅ 통과 | -3.87% |
+  | 072950 | 전일고가돌파 | 4.4% | ✅ 통과 | -2.17% |
+  | 267260 | 피봇R2돌파 | 1.2% | ✅ 통과 | -2.60% |
+  | 218410 | 피봇R2돌파 | 2.7% | ❌ 차단됐을것 | -2.63% |
+  | 321000 | 전일고가돌파 | — | ✅ 통과 | -2.63% |
+
+* 수익 2건(322000 +4.50%, 064400 +2.95%)은 진입 직후 연속 상승 — 진입봉 변동폭 2~3%대
+
+---
+
+## [2026-05-13]
+
+### 설계 변경
+
+* 종목 선정 아키텍처 전면 개편
+
+  * 기존:
+
+    * `daily-candles-job` → `strategy_results` 생성 → `target_stocks` 저장
+    * `engine.py` 시작 시 `target_stocks` 읽기 → `watch_symbols` 구성 → 매매 시작
+
+  * 변경:
+
+    * `daily-candles-job` → `strategy_results` 생성만 수행 (`target_stocks` 저장 제거)
+    * `engine.py` 09:05~09:10 → `strategy_results` 전체 조회 → 거래대금 + 갭 조건 필터 → 상위 10개 선정 → `target_stocks` 저장 → `watch_symbols` 구성 → 매매 시작
+
+---
+
+### 추가
+
+* `engine.py` — `_filter_by_trade_amount()` 함수 신규 추가
+
+  * 실행 시점:
+    * 09:05~09:10 자동 실행 (하루 1회)
+    * 09:10 이후 미완료 시 즉시 실행 (폴백)
+    * 엔진 재시작 시 `tr_pbmn_date == today` 이고 `tr_pbmn > 0` 이면 재조회 없이 복원
+
+  * 처리 흐름:
+    1. `strategy_results` 전체 읽기 (`summaryBadge == '진입'` 조건)
+    2. KIS API(`FHKST01010100`) 호출 — 현재가 + 시가 + 전일종가 + 누적 거래대금 수집
+    3. 갭 조건 필터 적용:
+       * 시가갭 `1.0% ~ 15.0%`
+       * 현재갭 `>= 0.5%`
+       * 현재가 >= 시가 (갭 유지)
+    4. 거래대금 내림차순 정렬 → 상위 10개 선정
+    5. 기존 `target_stocks` 전체 삭제 후 신규 저장
+    6. `_warmup_market_data()` 호출
+    7. `watch_symbols` 교체
+    8. 텔레그램 알림 (종목명, 거래대금, 시가갭 포함)
+
+* `engine.py` — `_trade_filter_done: bool` 클래스 변수 추가
+
+  * 당일 거래대금 필터 완료 여부 관리
+  * 재시작 시 `target_stocks`의 `tr_pbmn_date`, `tr_pbmn` 필드로 자동 복원
+
+* `kis_api.py` — `get_trade_amount()` 함수 추가
+
+  * `FHKST01010100` API에서 현재가 + 누적 거래대금(`acml_tr_pbmn`) 반환
+  * 반환: `{'price': int, 'tr_pbmn': int}`
+
+---
+
+### 수정
+
+* `engine.py` — `start()` 초기화 구조 변경
+
+  * 기존: 시작 시 `_reload_watch_symbols()` + `_warmup_market_data()` 호출 → `WsTickCollector` 시작
+  * 변경: `WsTickCollector([])` 빈 리스트로 시작 → `_filter_by_trade_amount()` 완료 후 `watch_symbols` 구성
+
+* `engine.py` — `_maybe_premarket_warmup()` 구조 변경
+
+  * 기존: 워밍업 전 `_reload_watch_symbols()` 호출
+  * 변경: `_reload_watch_symbols()` 제거 → `_warmup_market_data()`만 수행
+
+* `engine.py` — `_load_target_symbols_with_meta()` 재시작 복원 로직 추가
+
+  * `tr_pbmn_date == today` 이고 `tr_pbmn > 0` 인 종목 감지 시 `_trade_filter_done = True` 복원
+  * 거래대금 필터 완료 시 `tr_pbmn_rank` 기준 정렬
+  * 미완료 시 기존 `score` 기준 정렬 유지
+
+* `engine.py` — `_tick()` 거래대금 필터 트리거 추가
+
+  ```python
+  # 09:05~09:10 자동 실행
+  if not self._trade_filter_done and 905 <= hm <= 910:
+      self._filter_by_trade_amount()
+
+  # 09:10 이후 폴백
+  if not self._trade_filter_done and hm > 910:
+      self._filter_by_trade_amount()
+  ```
+
+* `candles/main.py` — `_build_target_stocks()` 호출 제거
+
+  * 기존: `strategy_results` 생성 후 `_build_target_stocks()` 호출하여 `target_stocks` 저장
+  * 변경: `strategy_results` 생성만 수행, `target_stocks` 저장은 `engine.py`에서 처리
+
+---
+
+### 저장 필드 변경
+
+* `target_stocks` 컬렉션 신규 저장 필드:
+
+  | 필드 | 내용 |
+  |------|------|
+  | `tr_pbmn` | 당일 누적 거래대금 |
+  | `tr_pbmn_rank` | 거래대금 순위 (1~10) |
+  | `tr_pbmn_at` | 조회 시각 (HH:MM) |
+  | `tr_pbmn_date` | 조회 날짜 (YYYYMMDD) — 재시작 복원 판단용 |
+  | `gap_pct` | 시가갭 (%) |
+  | `current_pct` | 현재갭 (%) |
+
+---
+
+### 효과
+
+* 장 시작 후 실제 수급(거래대금)과 갭 상승 여부를 동시에 반영한 종목 선정
+* 예상 거래대금(장전 추정) 대신 실제 거래대금(09:05~09:10) 기준으로 정확도 향상
+* 갭 하락 또는 갭 유지 실패 종목 자동 제외
+* 엔진 재시작 시 재조회 없이 당일 선정 결과 자동 복원
+
+---
+
+### 주의사항
+
+* 09:05 이전 매매 신호 없음 (watch_symbols 비어있음)
+* `strategy_results`에 `summaryBadge == '진입'` 종목이 없으면 필터 실패
+* 갭 조건 기준 (`GAP_MIN_PCT=1.0`, `GAP_MAX_PCT=15.0`, `CURRENT_MIN_PCT=0.5`) 은 시장 상황에 따라 조정 필요
+* API 호출 수 = `strategy_results` 진입 후보 수 × 0.2초 — 종목 수에 따라 소요 시간 증가
+
+---
+
+### Cloud Run 변경
+
+* `premarket-filter` Cloud Run Scheduler 비활성화
+
+  * 기존 08:58 예상 거래대금 기반 필터 → engine.py 내부 실제 거래대금 기반 필터로 대체
+  * Cloud Run 서비스 코드는 유지 (롤백 대비)
+---
+
+## [2026-05-09]
+
+### 수정
+
+* `strategy.py` — 조건1 `GC+전고돌파확인` 거래량 지속성 필터 추가
+
+  * 기존:
+
+    * 돌파 확인봉만 유지되면 진입 가능
+    * 거래량 감소 상태의 돌파도 매수 허용
+
+  * 변경:
+
+    * 직전봉 대비 거래량 유지 여부 확인 추가
+
+    ```python
+    prev_volume = data[i - 1][pi["volume"]] if i > 0 else 0
+
+    volume_keep_ok = (
+        prev_volume > 0
+        and volume >= prev_volume * 0.8
+    )
+
+    if not volume_keep_ok:
+        return {
+            "signal": "HOLD",
+            "reason": "돌파거래량감소",
+            "energy": energy
+        }
+    ```
+
+  * 거래량 감소 상태의 후반 돌파 추격 진입 차단
+
+---
+
+* `strategy.py` — 조건1 `GC+전고돌파확인` EMA5 이격 과열 제한 강화
+
+  * 기존:
+
+    ```python
+    if dist_from_ema5 > cfg.get("maxDistanceFromEma5Pct", 3.0):
+    ```
+
+  * 변경:
+
+    * 시간대별 EMA5 이격 허용 범위 차등 적용
+
+    ```python
+    max_ema5_dist = (
+        4.5 if hm_int <= 930 else
+        3.5 if hm_int <= 1000 else
+        2.5
+    )
+
+    if dist_from_ema5 > max_ema5_dist:
+        return {
+            "signal": "HOLD",
+            "reason": "이격과열",
+            "energy": energy
+        }
+    ```
+
+  * 장초반 강한 추세는 허용하면서
+    후반 과열 추격 진입 차단
+
+---
+
+* `strategy.py` — 조건1 `GC+전고돌파확인` 장중 상승률 과열 차단 추가
+
+  * 신규 추가:
+
+    ```python
+    day_rise_pct = (
+        ((close / day_open) - 1) * 100
+        if day_open else 0
+    )
+
+    max_day_rise_pct = (
+        15 if hm_int <= 930 else
+        12 if hm_int <= 1000 else
+        8
+    )
+
+    if day_rise_pct > max_day_rise_pct:
+        return {
+            "signal": "HOLD",
+            "reason": "당일과열추격차단",
+            "energy": energy
+        }
+    ```
+
+  * 이미 큰 폭 상승한 종목의 후반 재추격 매수 차단
+
+---
+
+### 설계 변경
+
+* `GC+전고돌파확인` 전략 구조 개선
+
+  * 기존:
+
+    * 돌파 발생 여부 중심
+    * Breakout 자체를 진입 신호로 사용
+
+  * 변경:
+
+    * 돌파 위치
+    * 거래량 지속성
+    * EMA5 과열 여부
+    * 장중 상승 과열 상태
+
+    를 함께 평가하는 구조로 변경
+
+---
+
+### 효과
+
+* 후반 추격 매수 감소
+* 거래량 감소 돌파 실패 구간 차단
+* EMA5 과열 구간 진입 감소
+* 장중 고점 부근 재진입 감소
+* `GC+전고돌파확인` 조건 손절 빈도 감소 기대
+
+---
+
+### 주의사항
+
+* 초기 급등 종목 일부 진입 누락 가능
+* 장초반 강한 모멘텀 종목은 시간대별 완화 기준으로 일부 허용
+* 진입 빈도 감소는 정상 동작
+* 수익보다 손실 감소 및 체결 품질 개선 목적의 수정
+
+---
+
+### 분석 기반
+
+* `휴온스글로벌(084110)` 2026-05-08 5분봉 데이터 분석 기반 적용
+* 주요 손실 패턴:
+
+  * 후반 돌파 추격
+  * 거래량 감소 상태 돌파
+  * EMA5 과열 구간 진입
+  * 장중 +10% 이상 상승 후 재진입
+
+* 로그 기준 `GC+전고돌파확인` 조건 손실 비중이 높아 우선 수정 적용
+
+---
+
+## [2026-05-07]
+
+### 추가
+
+* `engine.py` — `_execute_sell()` 종목명 추적용 디버그 로그 추가
+
+  * 매도 실행 직전 positions 및 `_symbol_meta` 의 종목명 상태 출력
+
+  * 추가 코드:
+
+    ```python
+    logger.info(
+        f"[SELL-NAME] symbol={symbol} | "
+        f"pos_name={pos_name or '-'} | "
+        f"meta_name={meta_name or '-'}"
+    )
+    ```
+
+  * 종목명 최종 생성 실패 시 warning 로그 출력
+
+    ```python
+    logger.warning(
+        f"[SELL-NAME-MISSING] symbol={symbol} | reason={reason}"
+    )
+    ```
+
+---
+
+### 수정
+
+* `engine.py` — `_execute_sell()` positions 조회 방식 안정화
+
+  * 기존:
+
+    ```python
+    with self._positions_lock:
+        pos = self._positions.get(symbol, {})
+    ```
+
+  * 변경:
+
+    ```python
+    with self._positions_lock:
+        pos = dict(self._positions.get(symbol, {}))
+    ```
+
+  * 병렬 처리(ThreadPoolExecutor) 환경에서  
+    다른 스레드의 `positions.pop()` 영향 최소화
+
+---
+
+* `engine.py` — `_execute_sell()` 종목명 생성 구조 개선
+
+  * 기존:
+
+    ```python
+    raw_name = pos.get("name") or self._symbol_meta.get(symbol, {}).get("name", "")
+    display = f"{_normalize_name(raw_name, symbol)}({symbol})" if raw_name else symbol
+    ```
+
+  * 변경:
+
+    ```python
+    pos_name = pos.get("name", "")
+    meta_name = self._symbol_meta.get(symbol, {}).get("name", "")
+
+    raw_name = pos_name or meta_name
+    raw_name = _normalize_name(raw_name, symbol)
+
+    display = f"{raw_name}({symbol})" if raw_name else symbol
+    ```
+
+  * 종목명 source를 분리하여 추적 가능하도록 개선
+
+---
+
+### 설계 변경
+
+* 매도 알림 종목명 생성 과정 추적 강화
+
+  * 기존:
+
+    * 종목명 누락 발생 시 원인 확인 어려움
+    * positions / `_symbol_meta` 중 어느 경로가 비어있는지 확인 불가
+
+  * 변경:
+
+    * positions 기반 종목명
+    * `_symbol_meta` 기반 종목명
+    * 최종 display 생성 결과
+
+    를 각각 추적 가능하도록 로그 구조 개선
+
+---
+
+### 효과
+
+* `종목: 092790` 형태의 종목명 누락 원인 분석 가능
+* 병렬 매도 처리 중 positions 참조 안정성 향상
+* 매도 알림 종목명 생성 경로 추적 가능
+* 향후 legacy 포지션 데이터 문제 분석 용이
+
+---
+
+### 주의사항
+
+* INFO/WARNING 로그 증가 가능
+* 장중 매도 빈도가 많을 경우 로그량 증가 가능
+
+---
+
 ## [2026-05-13]
 
 ### 설계 변경

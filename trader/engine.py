@@ -421,10 +421,14 @@ class TradingEngine:
                 if not ticker:
                     continue
                 candidates.append({
-                    "ticker":   ticker,
-                    "name":     data.get("name", ticker),
-                    "strategy": "",
-                    "score":    float(data.get("confidence", 0)),
+                    "ticker":            ticker,
+                    "name":              data.get("name", ticker),
+                    "strategy":          "",
+                    "score":             float(data.get("confidence", 0)),
+                    "passed_strategies": data.get("passed_strategies", []),
+                    "financial_grade":   data.get("valuation", ""),
+                    "confidence":        int(data.get("confidence", 0)),
+                    "exchange":          data.get("exchange", "KRX"),
                 })
         except Exception as e:
             logger.error(f"[거래대금필터] strategy_results 읽기 실패: {e}")
@@ -535,23 +539,35 @@ class TradingEngine:
             for i, item in enumerate(selected, 1):
                 ref = self._fs.collection("target_stocks").document(item["ticker"])
                 batch.set(ref, {
-                    "ticker":       item["ticker"],
-                    "name":         item["name"],
-                    "tr_pbmn":      item["tr_pbmn"],
-                    "tr_pbmn_rank": i,
-                    "tr_pbmn_at":   now_hm,
-                    "tr_pbmn_date": today_str,
-                    "gap_pct":      item["gap_pct"],
-                    "current_pct":  item["current_pct"],
-                    "score":        item["score"],
+                    "ticker":            item["ticker"],
+                    "name":              item["name"],
+                    "exchange":          item.get("exchange", "KRX"),
+                    "financial_grade":   item.get("financial_grade", ""),
+                    "confidence":        item.get("confidence", 0),
+                    "passed_strategies": item.get("passed_strategies", []),
+                    "tr_pbmn":           item["tr_pbmn"],
+                    "tr_pbmn_rank":      i,
+                    "tr_pbmn_at":        now_hm,
+                    "tr_pbmn_date":      today_str,
+                    "gap_pct":           item["gap_pct"],
+                    "current_pct":       item["current_pct"],
+                    "score":             item["score"],
                 })
             batch.commit()
             logger.info(f"[거래대금필터] target_stocks {len(selected)}개 저장 완료")
         except Exception as e:
             logger.error(f"[거래대금필터] Firestore 저장 실패: {e}")
-
-        # ── 5. watch_symbols 교체 ────────────────────────
+        
+        # ── 5. watch_symbols 교체 + symbol_meta 갱신 ────────────────────────
         new_symbols = [item["ticker"] for item in selected]
+
+        # symbol_meta 갱신 (종목명 소실 방지)
+        for item in selected:
+            self._symbol_meta[item["ticker"]] = {
+                "name":     item["name"],
+                "strategy": item.get("passed_strategies", [""])[0] if item.get("passed_strategies") else "",
+                "score":    item["score"],
+            }
 
         # 보유 포지션 강제 편입
         with self._positions_lock:
@@ -780,47 +796,15 @@ class TradingEngine:
                     self._finalize_order(symbol, "BUY", bar_time, executed)
 
         elif signal == "SELL" and is_holding:
-            if reason == "손절대기":
-                pending_bar = self._stop_loss_pending.get(symbol)
-                last_bar_key = ws_1min[-1][0] if ws_1min else None
-
-                if pending_bar is None:
-                    self._stop_loss_pending[symbol] = last_bar_key
-                    logger.info(f"[손절대기] {display} | 봉={last_bar_key} → 다음 1분봉 종가 확인 예정")
-                elif last_bar_key != pending_bar:
-                    last_close = ws_1min[-1][4] if ws_1min else current_price
-                    pending_profit = (last_close / entry_price - 1) * 100 if entry_price else 0
-                    daily_stop_loss = float(self._get_strategy_cached(symbol).get("dailyStopLoss") or 0)
-                    stop_pct = (
-                        abs(daily_stop_loss / entry_price - 1) * 100
-                        if daily_stop_loss > 0 and entry_price > 0
-                        else self.cfg.get("stopLoss", 2.0)
-                    )
-                    if pending_profit <= -stop_pct:
-                        logger.info(f"[손절확정] {display} | 종가:{last_close} | 수익:{pending_profit:.2f}%")
-                        if self._can_place_order(symbol, "SELL", last_bar_key):
-                            executed = False
-                            try:
-                                executed = self._execute_sell(symbol, last_close, reason, entry_price)
-                            finally:
-                                self._finalize_order(symbol, "SELL", last_bar_key, executed)
-                                if executed:
-                                    self._stop_loss_pending.pop(symbol, None)
-                                    self._touched_limit_up.pop(symbol, None)
-                    else:
-                        logger.info(f"[손절취소] {display} | 종가:{last_close} | 수익:{pending_profit:.2f}% 회복")
+            if self._can_place_order(symbol, "SELL", bar_time):
+                executed = False
+                try:
+                    executed = self._execute_sell(symbol, current_price, reason, entry_price)
+                finally:
+                    self._finalize_order(symbol, "SELL", bar_time, executed)
+                    if executed:
                         self._stop_loss_pending.pop(symbol, None)
-            else:
-                if self._can_place_order(symbol, "SELL", bar_time):
-                    executed = False
-                    try:
-                        executed = self._execute_sell(symbol, current_price, reason, entry_price)
-                    finally:
-                        self._finalize_order(symbol, "SELL", bar_time, executed)
-                        if executed:
-                            self._stop_loss_pending.pop(symbol, None)
-                            self._touched_limit_up.pop(symbol, None)
-
+                        self._touched_limit_up.pop(symbol, None)
         elif reason == "상한가터치-대기":
             self._touched_limit_up[symbol] = True
             logger.info(f"[상한가터치] {display} → 다음 봉 이탈 시 매도 대기")

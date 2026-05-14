@@ -85,14 +85,25 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "enabled": True,
         "volumeKeepRatio": 0.8,
         "maxDistanceFromEma5Pct": {
-            "until0930": 4.5,
-            "until1000": 3.5,
-            "after1000": 2.5,
+            "until0930": 3.0,
+            "until1000": 2.5,
+            "after1000": 2.0,
         },
         "maxDayRisePct": {
-            "until0930": 15.0,
-            "until1000": 12.0,
-            "after1000": 8.0,
+            "until0930": 8.0,
+            "until1000": 6.0,
+            "after1000": 4.5,
+        },
+        "maxDistanceFromEma20Pct": {
+            "until0930": 7.0,
+            "until1000": 6.0,
+            "after1000": 5.0,
+        },
+        # 응축 확인이 없는 전일고가/피봇R2 돌파에만 선택 적용
+        "tightRange": {
+            "enabled": True,
+            "lookback": 3,
+            "maxAvgRangePct": 2.5,
         },
     },
 
@@ -462,7 +473,51 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         energy_filter_ok = _energy_buy_ok("vcpBreakout")
         if close <= ema20_curr:
-            return {"signal": None, "reason": "", "energy": energy}        
+            return {"signal": None, "reason": "", "energy": energy}
+
+        # ── 공통 과열 방지: 이미 많이 오른 위치의 추격매수 제외 ──
+        # 응축 여부는 공통 적용하지 않는다. VCP/에너지 조건은 자체 점수로 판단하고,
+        # tightRange는 전일고가/피봇R2처럼 별도 응축 확인이 없는 조건에만 선택 적용한다.
+        guard_cfg = cfg.get("gcBreakoutGuard", {}) or {}
+        if guard_cfg.get("enabled", True):
+            day_rise_pct = _calc_gap_from_open(data, i, close, pi)
+            dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
+            dist_from_ema20 = ((close / ema20_curr) - 1) * 100 if ema20_curr else 0
+
+            max_day_rise_pct = _get_intraday_limit(
+                guard_cfg.get("maxDayRisePct", {}) or {},
+                hm_int,
+                until0930=8.0,
+                until1000=6.0,
+                after1000=4.5,
+            )
+            max_ema5_dist = _get_intraday_limit(
+                guard_cfg.get("maxDistanceFromEma5Pct", {}) or {},
+                hm_int,
+                until0930=3.0,
+                until1000=2.5,
+                after1000=2.0,
+            )
+            max_ema20_dist = _get_intraday_limit(
+                guard_cfg.get("maxDistanceFromEma20Pct", {}) or {},
+                hm_int,
+                until0930=7.0,
+                until1000=6.0,
+                after1000=5.0,
+            )
+
+            if day_rise_pct > max_day_rise_pct:
+                return {"signal": "HOLD", "reason": f"당일과열추격차단({day_rise_pct:.1f}%>{max_day_rise_pct:.1f}%)", "energy": energy}
+            if dist_from_ema5 > max_ema5_dist:
+                return {"signal": "HOLD", "reason": f"EMA5이격과열({dist_from_ema5:.1f}%>{max_ema5_dist:.1f}%)", "energy": energy}
+            if dist_from_ema20 > max_ema20_dist:
+                return {"signal": "HOLD", "reason": f"EMA20이격과열({dist_from_ema20:.1f}%>{max_ema20_dist:.1f}%)", "energy": energy}
+
+            # 진입봉 변동폭 과대 차단 (장대양봉 고점 추격 방지)
+            bar_range_pct = (high - low) / close * 100 if close > 0 else 0
+            max_bar_range_pct = guard_cfg.get("maxBarRangePct", 3.5)
+            if bar_range_pct > max_bar_range_pct:
+                return {"signal": "HOLD", "reason": f"진입봉과대({bar_range_pct:.1f}%>{max_bar_range_pct:.1f}%)", "energy": energy}
 
         # ──────────────────────────────────────────────
         # [조건0-A] VCP 최우선: 일봉 VCP돌파 고점수 + 5분봉 Pivot 돌파
@@ -478,39 +533,6 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 "signal": "BUY",
                 "reason": f"VCP돌파+Pivot(점수{daily_vcp_score})",
-                "energy": energy,
-            }
-
-        # ──────────────────────────────────────────────
-        # [조건0-B] VCP 고점수 + 5분봉 에너지 응축 돌파
-        # ──────────────────────────────────────────────
-        if is_vcp_high and energy_filter_ok and is_energy_breakout:
-            logger.debug(
-                f"🥇 [VCP최우선-B] VCP점수:{daily_vcp_score} | "
-                f"에너지점수:{energy['score']}"
-            )
-            return {
-                "signal": "BUY",
-                "reason": f"VCP고점수+에너지돌파(점수{daily_vcp_score})",
-                "energy": energy,
-            }
-
-        # ──────────────────────────────────────────────
-        # [조건0-C] VCP 응축 조기 진입
-        #   cfg.vcpEarlyEntry = False 로 비활성화 가능
-        # ──────────────────────────────────────────────
-        if (cfg.get("vcpEarlyEntry", True)
-                and is_vcp_squeeze_strategy and is_vcp_medium
-                and has_recent_golden_cross and is_within_gc_window
-                and is_swing_breakout):
-            if not _energy_buy_ok("vcpSqueezeGc"):
-                return {"signal": "HOLD", "reason": _energy_hold_reason("vcpSqueezeGc"), "energy": energy}
-            logger.debug(
-                f"🥈 [VCP조기진입] VCP점수:{daily_vcp_score} | GC+전고돌파"
-            )
-            return {
-                "signal": "BUY",
-                "reason": f"VCP응축+GC전고(점수{daily_vcp_score})",
                 "energy": energy,
             }
 
@@ -559,10 +581,12 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 # [3-B] 시간대별 EMA5 이격 과열 차단
                 dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
                 dist_cfg = guard_cfg.get("maxDistanceFromEma5Pct", {}) or {}
-                max_ema5_dist = (
-                    dist_cfg.get("until0930", 4.5) if hm_int <= 930 else
-                    dist_cfg.get("until1000", 3.5) if hm_int <= 1000 else
-                    dist_cfg.get("after1000", 2.5)
+                max_ema5_dist = _get_intraday_limit(
+                    dist_cfg,
+                    hm_int,
+                    until0930=3.0,
+                    until1000=2.5,
+                    after1000=2.0,
                 )
 
                 if dist_from_ema5 > max_ema5_dist:
@@ -577,10 +601,12 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
                 day_rise_pct = ((close / day_open) - 1) * 100 if day_open else 0
                 day_rise_cfg = guard_cfg.get("maxDayRisePct", {}) or {}
-                max_day_rise_pct = (
-                    day_rise_cfg.get("until0930", 15.0) if hm_int <= 930 else
-                    day_rise_cfg.get("until1000", 12.0) if hm_int <= 1000 else
-                    day_rise_cfg.get("after1000", 8.0)
+                max_day_rise_pct = _get_intraday_limit(
+                    day_rise_cfg,
+                    hm_int,
+                    until0930=8.0,
+                    until1000=6.0,
+                    after1000=4.5,
                 )
 
                 if day_rise_pct > max_day_rise_pct:
@@ -623,10 +649,14 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         breakout_buffer_pct = ph_cfg.get("breakoutBufferPct", 0.2)
         breakout_line       = prev_day_high * (1 + breakout_buffer_pct / 100)
 
+        # 확인봉: 2봉 전은 돌파 전, 직전봉이 이미 위에 있어야 진입
+        prev_close_2 = data[i - 2][pi["close"]] if i >= 2 else None
         is_fresh_prev_high_breakout = (
             prev_close is not None
-            and prev_close <= breakout_line
-            and close > breakout_line
+            and prev_close_2 is not None
+            and prev_close_2 <= breakout_line   # 2봉 전은 돌파 전
+            and prev_close > breakout_line       # 직전봉이 확인봉
+            and close > breakout_line            # 현재봉도 유지
         )
         trend_ok = ma5_curr > ma20_curr and ma5_curr > ma5_prev and close > ma5_curr
         vol_ok   = volume > avg_vol * ph_cfg.get("volMultiplier", 1.5)
@@ -644,26 +674,18 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         if (ph_time_ok and is_bull_candle and is_fresh_prev_high_breakout
                 and trend_ok and vol_ok and close_strong_enough
                 and body_ratio_ok and trade_value_ok):
+            tight_cfg = guard_cfg.get("tightRange", {}) or {}
+            if tight_cfg.get("enabled", True):
+                tight_ok, avg_range_pct = _is_recent_tight_range(
+                    data, i, pi,
+                    lookback=tight_cfg.get("lookback", 3),
+                    max_avg_range_pct=tight_cfg.get("maxAvgRangePct", 2.5),
+                )
+                if not tight_ok:
+                    return {"signal": "HOLD", "reason": f"전일고가돌파-직전응축부족({avg_range_pct:.1f}%)", "energy": energy}
             if not _energy_buy_ok("prevHighBreakout"):
                 return {"signal": "HOLD", "reason": _energy_hold_reason("prevHighBreakout"), "energy": energy}
             return {"signal": "BUY", "reason": "전일고가돌파", "energy": energy}
-
-        # ──────────────────────────────────────────────
-        # [조건3] 장 초반 피봇 R2 돌파
-        #   MA5 하락 기울기이면 BUY 대신 HOLD
-        # ──────────────────────────────────────────────
-        # 변경: EMA5 기울기 판단        
-
-        if is_early_morning and is_bull_candle and is_pivot_r2_breakout:
-            if is_ema5_falling:
-                logger.debug(
-                    f"⛔ [피봇R2차단] EMA5 하락 기울기 | "
-                    f"ema5_prev2:{ema5_prev2} | ema5_prev:{ema5_prev} | ema5_curr:{ema5_curr}"
-                )
-                return {"signal": "HOLD", "reason": "피봇R2차단(EMA5하락)", "energy": energy}
-            if not _energy_buy_ok("pivotR2"):
-                return {"signal": "HOLD", "reason": _energy_hold_reason("pivotR2"), "energy": energy}
-            return {"signal": "BUY", "reason": "피봇R2돌파", "energy": energy}
 
         # ──────────────────────────────────────────────
         # [조건4] 거래량 폭발 + MA5 연속 상승
@@ -703,39 +725,6 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
             return {"signal": "BUY", "reason": "1분봉지속상승", "energy": energy}
 
-        # ──────────────────────────────────────────────
-        # [조건5-A] 1분봉 EMA 골든크로스 + 거래량 폭발
-        # ──────────────────────────────────────────────
-        if data_1min and len(data_1min) >= 10:
-            closes_1m = [row[PriceIndex.CLOSE] for row in data_1min]
-            vols_1m   = [row[PriceIndex.VOLUME] for row in data_1min]            
-
-            ema5_curr_1m  = _ema(closes_1m[-5:], 5)
-            ema20_curr_1m = _ema(closes_1m[-20:], 20) if len(closes_1m) >= 20 else None
-
-            ema5_prev_1m  = _ema(closes_1m[-6:-1], 5) if len(closes_1m) >= 6 else None
-            ema20_prev_1m = _ema(closes_1m[-21:-1], 20) if len(closes_1m) >= 21 else None
-
-            # 거래량 평균 (최근 5~10봉)
-            avg_vol = sum(vols_1m[-10:-1]) / max(len(vols_1m[-10:-1]), 1)
-            vol_explosion = volume >= avg_vol * 10
-
-            ema_cross = (
-                ema5_prev_1m is not None and ema20_prev_1m is not None and
-                ema5_curr_1m is not None and ema20_curr_1m is not None and
-                ema5_prev_1m <= ema20_prev_1m and
-                ema5_curr_1m > ema20_curr_1m
-            )
-
-            if ema_cross and vol_explosion:
-                if not _energy_buy_ok("ema1mGolden"):
-                    return {"signal": "HOLD", "reason": _energy_hold_reason("ema1mGolden"), "energy": energy}
-                return {
-                    "signal": "BUY",
-                    "reason": "1분봉EMA골든+거래량폭발",
-                    "energy": energy
-                }
-                
         # ──────────────────────────────────────────────
         # [조건6] 에너지 응축 돌파
         #   VCP 중간점수(>=50) 이면 임계값 55점으로 완화 (기본 60점)
@@ -1093,6 +1082,49 @@ def _calc_gap_from_open(data: list, i: int, close: float, pi: dict) -> float:
             day_open = data[k][pi["open"]]
             return (close - day_open) / day_open * 100 if day_open else 0.0
     return 0.0
+
+
+def _get_intraday_limit(
+    cfg: dict,
+    hm_int: int,
+    *,
+    until0930: float,
+    until1000: float,
+    after1000: float,
+) -> float:
+    """시간대별 과열 제한값 반환. 09:10 구간은 별도로 나누지 않는다."""
+    if hm_int <= 930:
+        return cfg.get("until0930", until0930)
+    if hm_int <= 1000:
+        return cfg.get("until1000", until1000)
+    return cfg.get("after1000", after1000)
+
+
+def _is_recent_tight_range(
+    data: list,
+    i: int,
+    pi: dict,
+    *,
+    lookback: int = 3,
+    max_avg_range_pct: float = 2.5,
+) -> tuple[bool, float]:
+    """직전 n개 5분봉 평균 변동폭이 제한값 이하면 응축 상태로 판단."""
+    if lookback <= 0 or i < lookback:
+        return True, 0.0
+
+    ranges = []
+    for k in range(i - lookback, i):
+        high = data[k][pi["high"]]
+        low = data[k][pi["low"]]
+        close = data[k][pi["close"]]
+        if close > 0:
+            ranges.append((high - low) / close * 100)
+
+    if not ranges:
+        return True, 0.0
+
+    avg_range_pct = sum(ranges) / len(ranges)
+    return avg_range_pct <= max_avg_range_pct, avg_range_pct
 
 
 def _check_steady_rising(data: list, i: int, n: int, close_idx: int) -> bool:
