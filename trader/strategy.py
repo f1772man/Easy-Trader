@@ -688,10 +688,13 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             return {"signal": "BUY", "reason": "전일고가돌파", "energy": energy}
 
         # ──────────────────────────────────────────────
-        # [조건4] 거래량 폭발 + MA5 연속 상승
+        # [조건4] 거래량 폭발 + MA5 상승
+        #   - target_stocks 단계에서 이미 갭/거래대금 강세 종목을 선별했으므로,
+        #     실시간 진입에서는 MA5 연속상승/기울기까지 재확인하지 않는다.
+        #   - 목적: 1~2봉 늦은 추격 진입을 줄이고 초기 폭발 구간 진입을 앞당긴다.
         # ──────────────────────────────────────────────
         if (is_ma_bull and is_vol_explosion and is_gap_up
-                and ma5_up1 and ma5_up2 and ma5_slope_ok and price_above_ma5):
+                and ma5_up1 and price_above_ma5):
             if not _energy_buy_ok("volumeExplosion"):
                 return {"signal": "HOLD", "reason": _energy_hold_reason("volumeExplosion"), "energy": energy}
             if not trailing_reentry_price_ok:
@@ -701,7 +704,7 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 return {"signal": "HOLD", "reason": "트레일링재진입차단(EMA5하락)", "energy": energy}
             return {
                 "signal": "BUY",
-                "reason": f"거래량폭발({vol_ratio:.1f}배)+시가대비상승+MA5상승(연속)",
+                "reason": f"거래량폭발({vol_ratio:.1f}배)+시가대비상승+MA5상승",
                 "energy": energy,
             }
 
