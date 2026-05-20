@@ -116,6 +116,14 @@ class TradingEngine:
         self._trade_filter_done: bool = False   # 당일 거래대금 필터 완료 여부
         self._market_open_notified: bool = False  # 09:00 보유종목 처리 알림 (하루 1회)
 
+        # 마켓 게이트 (foreign_signal 기반 동적 스캔 타이밍)
+        self._market_gate: str = "UNKNOWN"        # gate 값 (BULL/BEAR/NEUTRAL/UNKNOWN)
+        self._market_top_n: int = 10              # 거래대금 필터 선정 종목 수
+        self._scan_hm: int = 920                  # 거래대금 필터 실행 기준 시각 (hhmm)
+        self._gate_loaded_date: str = ""          # Firestore 로드 완료 날짜 (하루 1회 가드)
+        self._gate_block_pending: bool = False    # BLOCK 고신뢰 → 09:00 이후 코스닥 갭 확인 대기
+        self._gate_retry_count: int = 0           # phase1 재시도 횟수 (최대 5회)
+
         # 주문 중복 방지
         self._order_lock = threading.RLock()
         self._inflight_orders: set[str] = set()
@@ -265,13 +273,23 @@ class TradingEngine:
                 self._flush_market_data_once(now.strftime("%Y%m%d"))
             return
 
-        # ── 거래대금 필터: 09:20~09:25 자동 실행 (하루 1회) ──
-        if not self._trade_filter_done and 920 <= hm <= 925:
+        # ── 마켓 게이트 2단계 확정 (09:00~09:10, BLOCK 대기 중인 경우만) ──
+        if self._gate_block_pending and 900 <= hm <= 910:
+            self._load_market_gate_phase2()
+
+        # ── 거래대금 필터: 동적 시각(scan_hm) 자동 실행 (하루 1회) ──
+        _scan_hm  = self._scan_hm                          # gate 기반 동적 시각
+        _scan_h   = _scan_hm // 100
+        _scan_m   = _scan_hm % 100
+        _fall_m   = _scan_m + 5
+        _fallback_hm = (_scan_h * 100 + _fall_m) if _fall_m < 60 \
+                       else ((_scan_h + 1) * 100 + (_fall_m - 60))  # 분 60 초과 안전 처리
+        if not self._trade_filter_done and _scan_hm <= hm <= _fallback_hm:
             self._filter_by_trade_amount()
 
-        # ── 폴백: 09:25 이후에도 미완료 시 즉시 실행 ──────
-        if not self._trade_filter_done and hm > 925:
-            logger.warning("[거래대금필터] 09:25 초과 미완료 → 즉시 실행")
+        # ── 폴백: fallback_hm 초과 후에도 미완료 시 즉시 실행 ──────
+        if not self._trade_filter_done and hm > _fallback_hm:
+            logger.warning(f"[거래대금필터] {_fallback_hm} 초과 미완료 → 즉시 실행")
             self._filter_by_trade_amount()
 
         # ── 거래대금 필터 미완료 시: 보유 포지션만 처리 ──
@@ -329,6 +347,14 @@ class TradingEngine:
         self._stop_loss_pending.clear()
         self._trade_filter_done = False
         self._market_open_notified = False
+
+        # 마켓 게이트 리셋 (다음날 새로 로드)
+        self._market_gate = "UNKNOWN"
+        self._market_top_n = 10
+        self._scan_hm = 920
+        self._gate_loaded_date = ""
+        self._gate_block_pending = False
+        self._gate_retry_count = 0
 
         logger.info(f"[캐시] 날짜 변경 → snapshot/strategy/버퍼/주문가드/재매수방지 초기화 ({today_str})")
         if self._collector:
@@ -424,17 +450,196 @@ class TradingEngine:
             else:
                 logger.warning("[장전워밍업] 일부 실패 → 다음 틱에서 재시도")
 
+        # 4. 마켓 게이트 1단계 로드 (Firestore gate/policy — 코스닥 갭은 09:00 이후 2단계에서 확정)
+        self._load_market_gate_phase1(today_str)
+
+    def _load_market_gate_phase1(self, today_str: str):
+        """
+        [1단계 — 08:50~08:59 워밍업 타임]
+        Firestore market_analysis/latest → foreign_signal 필드에서
+        전날 외국인 수급 분석 결과를 읽어 scan_hm / market_top_n 을 잠정 결정한다.
+
+        BLOCK + 고신뢰인 경우에는 코스닥 지수가 프리마켓에서 0을 반환할 수 있으므로
+        즉시 판단하지 않고 _gate_block_pending=True 로 표시해 두고,
+        09:00 이후 _load_market_gate_phase2() 에서 코스닥 갭을 확인 후 최종 확정한다.
+        """
+        if self._gate_loaded_date == today_str:
+            return
+
+        from trader.telegram import send_telegram
+
+        # ── 1. Firestore 조회 ─────────────────────────────
+        try:
+            doc = self._fs.collection("market_analysis").document("latest").get()
+            if not doc.exists:
+                self._gate_retry_count += 1
+                if self._gate_retry_count > 5:
+                    logger.warning("[마켓게이트][1단계] 최대 재시도 초과 → 기본값(09:20·10종목) 유지")
+                    self._gate_loaded_date = today_str
+                else:
+                    logger.warning(
+                        f"[마켓게이트][1단계] market_analysis/latest 없음 → "
+                        f"다음 틱 재시도 ({self._gate_retry_count}/5)"
+                    )
+                return
+
+            fs_data    = (doc.to_dict() or {}).get("foreign_signal", {})
+            gate       = str(fs_data.get("gate", "UNKNOWN")).strip().upper()
+            policy     = str(fs_data.get("entry_policy", "ALLOW")).strip().upper()
+            confidence = float(fs_data.get("confidence", 0))
+            updated_at = str(fs_data.get("updated_at", ""))
+
+        except Exception as e:
+            self._gate_retry_count += 1
+            if self._gate_retry_count > 5:
+                logger.warning(f"[마켓게이트][1단계] 최대 재시도 초과({e}) → 기본값(09:20·10종목) 유지")
+                self._gate_loaded_date = today_str
+            else:
+                logger.warning(
+                    f"[마켓게이트][1단계] Firestore 조회 실패({e}) → "
+                    f"다음 틱 재시도 ({self._gate_retry_count}/5)"
+                )
+            return
+
+        self._gate_retry_count = 0  # 성공 시 리셋
+        self._market_gate = gate
+
+        # ── 2. 타이밍 + 종목 수 잠정 결정 ─────────────────
+        if policy == "BLOCK" and confidence >= 0.8:
+            # 코스닥 갭 확인 필요 → 2단계에서 최종 확정 (잠정: 최대 지연)
+            self._scan_hm           = 930
+            self._market_top_n      = 5
+            self._gate_block_pending = True
+            label = "⛔ BEAR(BLOCK/고신뢰) → 잠정 09:30·5종목 | 코스닥 갭 확인 대기"
+
+        elif gate == "BULL" and confidence >= 0.8:
+            self._scan_hm      = 910
+            self._market_top_n = 10
+            label = "🟢 BULL(고신뢰) → 09:10 조기 | 10종목"
+
+        elif gate == "BULL":
+            self._scan_hm      = 915
+            self._market_top_n = 10
+            label = "🟡 BULL(저신뢰) → 09:15 | 10종목"
+
+        elif gate == "NEUTRAL":
+            self._scan_hm      = 920
+            self._market_top_n = 10
+            label = "⚪ NEUTRAL → 09:20 기본 | 10종목"
+
+        elif gate == "BEAR" and confidence >= 0.8:
+            self._scan_hm      = 925
+            self._market_top_n = 5
+            label = "🔴 BEAR(고신뢰) → 09:25 지연 | 5종목"
+
+        elif gate == "BEAR":
+            self._scan_hm      = 920
+            self._market_top_n = 7
+            label = "🟠 BEAR(저신뢰) → 09:20 기본 | 7종목"
+
+        else:
+            self._scan_hm      = 920
+            self._market_top_n = 10
+            label = f"❓ {gate}(UNKNOWN) → 09:20 기본 | 10종목"
+
+        self._gate_loaded_date = today_str
+
+        logger.info(
+            f"[마켓게이트][1단계] {label} | gate={gate} | policy={policy} | "
+            f"confidence={confidence:.0%} | updated={updated_at[:10] if updated_at else '?'}"
+        )
+        # BLOCK은 phase2 확정 후 결과를 1회만 발송 (phase1 잠정 알림 생략)
+        if not self._gate_block_pending:
+            send_telegram(
+                f"📊 [마켓게이트] {label}\n"
+                f"gate={gate} | policy={policy} | 신뢰도={confidence:.0%}\n"
+                f"기준일: {updated_at[:10] if updated_at else '?'}"
+            )
+
+    def _load_market_gate_phase2(self):
+        """
+        [2단계 — 09:00 이후 첫 tick]
+        BLOCK + 고신뢰(_gate_block_pending=True) 인 경우에만 실행.
+        코스닥 지수(1001) 현재 등락률을 조회해 +1.5% 이상이면 BLOCK을 해제한다.
+
+        - BLOCK 해제 시: scan_hm=925, top_n=5 (BEAR 고신뢰 수준으로 완화)
+        - BLOCK 유지 시: scan_hm=930, top_n=5 그대로
+        """
+        if not self._gate_block_pending:
+            return
+
+        from trader.telegram import send_telegram
+
+        try:
+            res = _url_fetch(
+                "/uapi/domestic-stock/v1/quotations/inquire-index-price",
+                "FHPUP02100000", "",
+                {
+                    "FID_COND_MRKT_DIV_CODE": "U",
+                    "FID_INPUT_ISCD": "1001",   # 코스닥
+                },
+            )
+            if not res.isOK():
+                logger.warning("[마켓게이트][2단계] 코스닥 지수 조회 실패 → BLOCK 유지")
+                self._gate_block_pending = False
+                return
+
+            output      = res.getBody().output
+            kosdaq_prpr = float(output.get("bstp_nmix_prpr", 0) or 0)
+            kosdaq_ctrt = float(output.get("bstp_nmix_prdy_ctrt", 0) or 0)  # 전일 대비 등락률
+
+            if kosdaq_prpr == 0:
+                logger.warning(
+                    "[마켓게이트][2단계] 코스닥 지수 0 반환 (데이터 미준비) → 다음 틱 재시도"
+                )
+                # _gate_block_pending = True 유지 → 900~910 범위 내 다음 틱에서 재시도
+                return
+
+            if kosdaq_ctrt >= 1.5:
+                # BLOCK 해제 → BEAR 고신뢰 수준으로 완화
+                self._scan_hm      = 925
+                self._market_top_n = 5
+                label = (
+                    f"✅ BLOCK 해제 — 코스닥 {kosdaq_ctrt:+.2f}% ≥ +1.5%\n"
+                    f"→ 09:25 지연·5종목으로 완화"
+                )
+            else:
+                label = (
+                    f"⛔ BLOCK 유지 — 코스닥 {kosdaq_ctrt:+.2f}% < +1.5%\n"
+                    f"→ 09:30 지연·5종목 유지"
+                )
+
+            self._gate_block_pending = False  # 2단계 완료
+
+            logger.info(f"[마켓게이트][2단계] {label.replace(chr(10), ' | ')}")
+            send_telegram(f"📊 [마켓게이트 확정] {label}")
+
+        except Exception as e:
+            logger.warning(f"[마켓게이트][2단계] 오류({e}) → BLOCK 유지")
+            self._gate_block_pending = False
+
     def _filter_by_trade_amount(self):
         """
-        strategy_results 전체 거래대금 + 갭 조건 조회 → 상위 10개로 watch_symbols 교체
-        - 09:20~09:25 사이 자동 실행 (하루 1회)
-        - 09:25 이후 미완료 시 즉시 실행 (폴백)
+        strategy_results 전체 거래대금 + 갭 조건 조회 → 상위 TOP_N개로 watch_symbols 교체
+        - scan_hm(마켓게이트 기반 동적 시각) 자동 실행 (하루 1회)
+        - scan_hm+5분 이후 미완료 시 즉시 실행 (폴백)
+        - TOP_N: gate=BULL/NEUTRAL → 10개, BEAR(저신뢰) → 7개, BEAR(고신뢰)/BLOCK → 5개
         - 엔진 재시작 시 tr_pbmn_date == today 이면 재조회 없이 복원
         """
         import time as _time
         from trader.telegram import send_telegram
 
-        TOP_N        = 10
+        if self._gate_block_pending:
+            logger.warning(
+                "[마켓게이트] BLOCK pending 미해소 상태로 필터 실행 "
+                f"(코스닥 갭 확인 실패) → scan_hm={self._scan_hm}, top_n={self._market_top_n}"
+            )
+            send_telegram(
+                "⚠️ [마켓게이트] BLOCK pending 미해소\n코스닥 갭 확인 실패 → 09:30 기본 실행"
+            )
+            self._gate_block_pending = False
+
+        TOP_N        = self._market_top_n  # gate 기반 동적 종목 수 (기본 10, BEAR 시 5~7)
         API_INTERVAL = 0.2   # 초
         GAP_MIN_PCT  = 1.0   # 시가갭 하한 (%)
         GAP_MAX_PCT  = 15.0  # 시가갭 상한 (%) — 과열 제외
@@ -762,7 +967,6 @@ class TradingEngine:
                 # ws_1min r[0] = "YYYYMMDD_HHMM" (분단위)
                 # 진입 분("YYYYMMDD_HHMM")과 같은 봉은 포함해야
                 # max_price 계산에서 진입 분 고가가 누락되지 않음
-                entry_bucket = entry_time[:11]  # "YYYYMMDD_HH" → 시 단위 앞 11자
                 entry_min = entry_time[9:13]    # "HHMM"
                 entry_time_key = f"{entry_time[:8]}_{entry_min}"  # "YYYYMMDD_HHMM"
                 ws_1min_after = [r for r in ws_1min if r[0] >= entry_time_key]
@@ -1120,53 +1324,6 @@ class TradingEngine:
             return True
 
         return False
-
-    # ── 감시 목록 로드 ────────────────────────────────
-    def _load_target_symbols_with_meta(self) -> tuple[list[str], dict]:
-        try:
-            today_str = datetime.now(KST).strftime("%Y%m%d")
-            docs = self._fs.collection("target_stocks").stream()  # ✅ 공유 클라이언트
-            items, meta = [], {}
-            trade_filter_done_count = 0
-
-            for doc in docs:
-                data = doc.to_dict()
-                if not data:
-                    continue
-                ticker   = data.get("ticker", "").strip()
-                score    = float(data.get("score", 0))
-                name     = data.get("name", ticker)
-                strategy = data.get("strategy", "-")
-
-                # 엔진 재시작 시: tr_pbmn_date == today 이고 tr_pbmn > 0 이면 거래대금 필터 완료
-                if data.get("tr_pbmn_date") == today_str and int(data.get("tr_pbmn", 0) or 0) > 0:
-                    trade_filter_done_count += 1
-
-                if ticker:
-                    # 거래대금 필터 완료된 경우 tr_pbmn_rank 기준 정렬
-                    tr_pbmn_rank = data.get("tr_pbmn_rank", 9999)
-                    items.append((ticker, score, tr_pbmn_rank))
-                    meta[ticker] = {"name": name, "strategy": strategy, "score": score}
-
-            # 거래대금 필터 완료 여부 복원
-            if trade_filter_done_count > 0 and not self._trade_filter_done:
-                self._trade_filter_done = True
-                logger.info(
-                    f"[target_stocks] 재시작 감지: 거래대금 필터 완료 이력 확인 "
-                    f"({trade_filter_done_count}개) → _trade_filter_done=True"
-                )
-                # tr_pbmn_rank 기준 정렬 (거래대금 필터 완료 시)
-                items.sort(key=lambda x: x[2])
-            else:
-                # score 기준 정렬 (거래대금 필터 미완료 시)
-                items.sort(key=lambda x: x[1], reverse=True)
-
-            symbols = [t for t, _, _ in items]
-            logger.info(f"[target_stocks] {len(symbols)}개 로드")
-            return symbols, meta
-        except Exception as e:
-            logger.error(f"[target_stocks] 조회 실패: {e}")
-            return [], {}
 
     # ── 전일 snapshot/strategy 워밍업 ─────────────────
     def _get_prev_snapshot(self, symbol: str) -> Optional[dict]:
