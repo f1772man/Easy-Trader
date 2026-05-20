@@ -110,11 +110,11 @@ class TradingEngine:
         # 루프/상태 제어
         self._last_heartbeat_ts = 0.0
         self._last_flush_date = ""
-        self._last_market_scan_key = ""
         self._premarket_warmup_done_date = ""
         self._holiday_checked_date: str = ""
         self._today_opnd_yn: str = "Y"
         self._trade_filter_done: bool = False   # 당일 거래대금 필터 완료 여부
+        self._market_open_notified: bool = False  # 09:00 보유종목 처리 알림 (하루 1회)
 
         # 주문 중복 방지
         self._order_lock = threading.RLock()
@@ -218,9 +218,17 @@ class TradingEngine:
 
         self._cache_date = datetime.now(KST).strftime("%Y%m%d")
 
-        # watch_symbols는 09:05 _filter_by_trade_amount() 완료 후 구성
-        self._collector = WsTickCollector([])
+        # 전일 보유 종목은 거래대금 필터 전에도 09:00 즉시 매매 대응해야 하므로
+        # 엔진 시작 시점부터 감시목록/WS 구독에 먼저 편입한다.
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+
+        self._watch_symbols = holding_symbols[:]
+        self._collector = WsTickCollector(list(self._watch_symbols))
         self._collector.start()
+
+        if holding_symbols:
+            logger.info(f"[보유종목] 장시작 전 구독 준비: {holding_symbols}")
 
         while self.is_running:
             try:
@@ -246,27 +254,41 @@ class TradingEngine:
 
         self._rollover_if_needed(now)
         self._maybe_update_heartbeat(now)
-        self._maybe_premarket_warmup(now)
 
         hm = now.hour * 100 + now.minute
+
+        # 08:50~08:59 전일 보유 종목 전일 1분봉/snapshot 선로딩
+        self._maybe_premarket_warmup(now)
 
         if not (900 <= hm <= 1530):
             if hm >= 1531:
                 self._flush_market_data_once(now.strftime("%Y%m%d"))
             return
 
-        # ── 거래대금 필터: 09:05~09:10 자동 실행 (하루 1회) ──
-        if not self._trade_filter_done and 905 <= hm <= 910:
+        # ── 거래대금 필터: 09:20~09:25 자동 실행 (하루 1회) ──
+        if not self._trade_filter_done and 920 <= hm <= 925:
             self._filter_by_trade_amount()
 
-        # ── 폴백: 09:10 이후에도 미완료 시 즉시 실행 ──────
-        if not self._trade_filter_done and hm > 910:
-            logger.warning("[거래대금필터] 09:10 초과 미완료 → 즉시 실행")
+        # ── 폴백: 09:25 이후에도 미완료 시 즉시 실행 ──────
+        if not self._trade_filter_done and hm > 925:
+            logger.warning("[거래대금필터] 09:25 초과 미완료 → 즉시 실행")
             self._filter_by_trade_amount()
 
-        symbols = [s.strip() for s in self._watch_symbols if s.strip()]
-        if not symbols:
-            return
+        # ── 거래대금 필터 미완료 시: 보유 포지션만 처리 ──
+        if not self._trade_filter_done:
+            with self._positions_lock:
+                holding_symbols = list(self._positions.keys())
+            if not holding_symbols:
+                return
+            symbols = holding_symbols
+            if not self._market_open_notified:
+                from trader.telegram import send_telegram
+                send_telegram(f"🔔 [장시작] 보유종목 {holding_symbols} 신호처리 시작 (거래대금필터 대기 중)")
+                self._market_open_notified = True
+        else:
+            symbols = [s.strip() for s in self._watch_symbols if s.strip()]
+            if not symbols:
+                return
 
         tick_start = time.time()
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -294,7 +316,6 @@ class TradingEngine:
 
         self._cache_date = today_str
         self._last_flush_date = ""
-        self._last_market_scan_key = ""
         self._premarket_warmup_done_date = ""
 
         with self._order_lock:
@@ -306,6 +327,8 @@ class TradingEngine:
         self._today_sold.clear()
         self._touched_limit_up.clear()
         self._stop_loss_pending.clear()
+        self._trade_filter_done = False
+        self._market_open_notified = False
 
         logger.info(f"[캐시] 날짜 변경 → snapshot/strategy/버퍼/주문가드/재매수방지 초기화 ({today_str})")
         if self._collector:
@@ -376,20 +399,36 @@ class TradingEngine:
             self._premarket_warmup_done_date = today_str
             return
 
-        # 2. 워밍업만 재시도
+        # 2. 전일 보유 종목을 거래대금 필터와 무관하게 감시목록/WS에 강제 편입
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+
+        if holding_symbols:
+            added = [s for s in holding_symbols if s not in self._watch_symbols]
+            if added:
+                self._watch_symbols = list(self._watch_symbols) + added
+                if self._collector:
+                    self._collector.update_symbols(list(self._watch_symbols))
+                logger.info(f"[장전워밍업] 보유종목 WS 구독 추가: {added}")
+                from trader.telegram import send_telegram
+                send_telegram(f"⏰ [워밍업] 보유종목 {added} 감시목록 편입")
+
+        # 3. 워밍업만 재시도
         if self._premarket_warmup_done_date != today_str:
-            logger.info("[장전워밍업] 전일 snapshot + strategy cache 사전 로드")
+            logger.info("[장전워밍업] 전일 보유종목 snapshot + strategy cache 사전 로드")
             success = self._warmup_market_data()
             if success:
                 self._premarket_warmup_done_date = today_str
+                from trader.telegram import send_telegram
+                send_telegram("⏰ [워밍업] snapshot + 1분봉 seed 완료")
             else:
                 logger.warning("[장전워밍업] 일부 실패 → 다음 틱에서 재시도")
 
     def _filter_by_trade_amount(self):
         """
         strategy_results 전체 거래대금 + 갭 조건 조회 → 상위 10개로 watch_symbols 교체
-        - 09:05~09:10 사이 자동 실행 (하루 1회)
-        - 09:10 이후 미완료 시 즉시 실행 (폴백)
+        - 09:20~09:25 사이 자동 실행 (하루 1회)
+        - 09:25 이후 미완료 시 즉시 실행 (폴백)
         - 엔진 재시작 시 tr_pbmn_date == today 이면 재조회 없이 복원
         """
         import time as _time
@@ -399,7 +438,6 @@ class TradingEngine:
         API_INTERVAL = 0.2   # 초
         GAP_MIN_PCT  = 1.0   # 시가갭 하한 (%)
         GAP_MAX_PCT  = 15.0  # 시가갭 상한 (%) — 과열 제외
-        CURRENT_MIN_PCT = 0.5  # 현재갭 하한 (%) — 갭 유지 확인
 
         now       = datetime.now(KST)
         today_str = now.strftime("%Y%m%d")
@@ -436,9 +474,12 @@ class TradingEngine:
 
         if not candidates:
             logger.warning("[거래대금필터] strategy_results 진입 후보 없음 → 스킵")
+            send_telegram("⚠️ [거래대금필터] 진입 후보 종목 없음 → 스킵")
+            self._trade_filter_done = True
             return
 
         logger.info(f"[거래대금필터] {len(candidates)}개 후보 거래대금+갭 조회 시작")
+        send_telegram(f"🔍 [거래대금필터] {len(candidates)}개 종목 거래대금+갭 조회 시작 ({now_hm})")
 
         # ── 2. 거래대금 + 갭 조회 및 필터 ──────────────
         results    = []
@@ -475,13 +516,16 @@ class TradingEngine:
                 gap_hold    = stck_prpr >= stck_oprc
 
                 # 갭 조건 필터
-                if gap_pct < GAP_MIN_PCT or gap_pct > GAP_MAX_PCT:
-                    skip_count += 1
-                    continue
-                if current_pct < CURRENT_MIN_PCT:
-                    skip_count += 1
-                    continue
-                if not gap_hold:
+                # cond1: 시가갭 1~15%
+                # cond2: 시가갭 마이너스 + 현재가 ≥ 시가 + 시가 대비 현재갭 ≥ 1%
+                # cond3: 시가갭 마이너스 + 저가가 시가 아래로 내려갔다가 + 저가 대비 현재가 ≥ 2% 반등 + 현재가 ≥ 시가
+                cond1 = GAP_MIN_PCT <= gap_pct <= GAP_MAX_PCT
+                intraday_pct = round((stck_prpr - stck_oprc) / stck_oprc * 100, 2) if stck_oprc > 0 else 0
+                stck_lwpr    = int(output.get("stck_lwpr", 0) or 0)
+                low_pct      = round((stck_prpr - stck_lwpr) / stck_lwpr * 100, 2) if stck_lwpr > 0 else 0
+                cond2 = gap_pct < 0 and gap_hold and intraday_pct >= 1.0
+                cond3 = gap_pct < 0 and stck_lwpr < stck_oprc and low_pct >= 2.0 and gap_hold
+                if not (cond1 or cond2 or cond3):
                     skip_count += 1
                     continue
 
@@ -555,6 +599,14 @@ class TradingEngine:
                 })
             batch.commit()
             logger.info(f"[거래대금필터] target_stocks {len(selected)}개 저장 완료")
+
+            # meta/golden_pick_status 갱신 — Flutter UPDATE 배지용
+            self._fs.collection("meta").document("golden_pick_status").set({
+                "updated_at": now.isoformat(),
+                "date":       today_str,
+                "count":      len(selected),
+            })
+            logger.info("[거래대금필터] meta/golden_pick_status 갱신 완료")
         except Exception as e:
             logger.error(f"[거래대금필터] Firestore 저장 실패: {e}")
         
@@ -603,6 +655,7 @@ class TradingEngine:
             f"[거래대금필터] watch_symbols 교체 완료: "
             f"{len(new_symbols)}개 (추가={added}, 제거={removed})"
         )
+        send_telegram(f"✅ [거래대금필터] 신규종목 {added} 편입 완료")
 
         # ── 6. 전일 데이터 워밍업 ────────────────────────
         self._warmup_market_data()
@@ -763,6 +816,8 @@ class TradingEngine:
 
         signal = result["signal"]
         reason = result["reason"]
+        if signal not in ("BUY", "SELL") and reason:
+            logger.info(f"[{display}] HOLD | {reason}")
         energy = result["energy"]
         close = int(df["close"].iloc[i])
 
@@ -1112,105 +1167,6 @@ class TradingEngine:
         except Exception as e:
             logger.error(f"[target_stocks] 조회 실패: {e}")
             return [], {}
-
-    def _reload_watch_symbols(self):
-        from trader.telegram import send_telegram
-
-        new_symbols, symbol_meta = self._load_target_symbols_with_meta()
-
-        if not new_symbols:
-            fallback = [s.strip() for s in os.environ.get("WATCH_SYMBOLS", ",".join(WATCH_SYMBOLS)).split(",") if s.strip()]
-            logger.warning(f"[target_stocks] 폴백: {fallback}")
-            self._watch_symbols = fallback
-            send_telegram(f"⚠️ target_stocks 없음 → 폴백: {', '.join(fallback)}")
-            return
-
-        prev_symbols = self._watch_symbols[:]
-        self._symbol_meta = symbol_meta
-
-        final_symbols = list(new_symbols)
-
-        with self._positions_lock:
-            holding_symbols = list(self._positions.keys())
-
-        force_added = [s for s in holding_symbols if s not in final_symbols]
-        if force_added:
-            final_symbols += force_added
-
-        self._watch_symbols = final_symbols
-
-        added = [s for s in new_symbols if s not in prev_symbols]
-        removed = [s for s in prev_symbols if s not in final_symbols]
-
-        if self._collector:
-            self._collector.update_symbols(list(self._watch_symbols))
-
-        with self._snapshot_lock:
-            for sym in removed:
-                self._prev_snapshot_cache.pop(sym, None)
-
-        with self._strategy_lock:
-            for sym in removed:
-                self._strategy_cache.pop(sym, None)
-
-        with self._order_lock:
-            for sym in removed:
-                self._inflight_orders.discard(sym)
-                self._last_order_keys.pop(sym, None)
-                self._last_order_ts.pop(sym, None)
-
-        if added:
-            self._warmup_market_data()
-
-        # 복원된 포지션 종목은 target_stocks와 무관하게 감시 목록에 강제 포함
-        with self._positions_lock:
-            holding_symbols = list(self._positions.keys())
-        force_added = [s for s in holding_symbols if s not in self._watch_symbols]
-        if force_added:
-            self._watch_symbols = list(self._watch_symbols) + force_added
-            if self._collector:
-                self._collector.update_symbols(list(self._watch_symbols))
-            logger.info(f"[감시목록] 보유 포지션 강제 편입: {force_added}")
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-                list(ex.map(self._load_symbol_data, force_added))
-
-        logger.info(f"[감시목록] {len(self._watch_symbols)}개 | 추가={added} | 제거={removed}")
-
-        if not prev_symbols or added or removed:
-            overlap = [s for s in new_symbols if s in prev_symbols] if prev_symbols else []
-            now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
-            holding_extra = [s for s in self._watch_symbols if s not in new_symbols]
-            lines = [
-                f"📋 감시 종목 갱신 ({now_str})",
-                f"총 {len(self._watch_symbols)}개 (전략 {len(new_symbols)} + 포지션 {len(holding_extra)})"
-            ]
-            if added:
-                lines += ["", f"✅ 신규 편입: {len(added)}개"]
-                for t in added:
-                    m = symbol_meta.get(t, {})
-                    lines.append(f"  • {m.get('name', t)}({t}) [{m.get('strategy', '-')}] {m.get('score', 0):.1f}점")
-            # 연속 편입 (추가)
-            if overlap:
-                lines += ["", f"🔁 연속 편입: {len(overlap)}개"]
-                for t in overlap:
-                    m = symbol_meta.get(t, {})
-                    lines.append(f"  • {m.get('name', t)}({t}) [{m.get('strategy', '-')}] {m.get('score', 0):.1f}점")
-            if holding_extra:
-                lines += ["", f"📌 포지션 유지: {len(holding_extra)}개"]
-                for t in holding_extra:
-                    lines.append(f"  • {self._display_name(t)}")
-            if removed:
-                lines += ["", "❌ 제외:"]
-                for t in removed:
-                    lines.append(f"  • {t}")
-            if not added and not removed and not overlap:
-                lines += ["", "📄 종목 목록:"]
-                for t in new_symbols[:15]:
-                    m = symbol_meta.get(t, {})
-                    lines.append(f"  • {m.get('name', t)}({t}) [{m.get('strategy', '-')}] {m.get('score', 0):.1f}점")
-                if len(new_symbols) > 15:
-                    lines.append(f"  ... 외 {len(new_symbols) - 15}개")
-            send_telegram("\n".join(lines))
 
     # ── 전일 snapshot/strategy 워밍업 ─────────────────
     def _get_prev_snapshot(self, symbol: str) -> Optional[dict]:
