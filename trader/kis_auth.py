@@ -339,7 +339,7 @@ def _url_fetch(api_url, ptr_id, tr_cont, params, appendHeaders=None, postFlag=Fa
             code = str(res.getErrorCode())
             msg = res.getErrorMessage()
 
-            logger.warning(
+            logger.debug(
                 f"[KIS 실패] ptr_id={ptr_id} code={code} msg={msg} "
                 f"status={res.getResCode()} attempt={attempt}/{MAX_RETRY}"
             )
@@ -376,10 +376,6 @@ def _url_fetch(api_url, ptr_id, tr_cont, params, appendHeaders=None, postFlag=Fa
     code = str(res.getErrorCode())
     msg = res.getErrorMessage()
 
-    logger.warning(
-        f"[KIS 실패] ptr_id={ptr_id} code={code} msg={msg} status={res.getResCode()}"
-    )
-
     # 설정 오류: 재시도 불가
     if code in CONFIG_ERROR_CODES:
         logger.error(f"[KIS 설정 오류] ptr_id={ptr_id} code={code} msg={msg}")
@@ -387,12 +383,10 @@ def _url_fetch(api_url, ptr_id, tr_cont, params, appendHeaders=None, postFlag=Fa
 
     # 인증 오류: reAuth 후 1회 재시도
     if code in REAUTH_ERROR_CODES or res.getResCode() == 401:
-        logger.warning(f"[KIS 인증 오류] ptr_id={ptr_id} code={code} -> reAuth 후 재시도")
-
         try:
             reAuth(svr="vps" if isPaperTrading() else "prod", product=env.my_prod)
         except Exception as e:
-            logger.exception(f"[reAuth 실패] ptr_id={ptr_id} error={e}")
+            logger.error(f"[KIS 인증 오류] ptr_id={ptr_id} code={code} msg={msg} → reAuth 실패: {e}")
             return res
 
         headers = _make_headers(ptr_id, tr_cont, appendHeaders)
@@ -405,12 +399,11 @@ def _url_fetch(api_url, ptr_id, tr_cont, params, appendHeaders=None, postFlag=Fa
             return APIRespError(500, str(e))
 
         if retry_res.isOK():
-            logger.info(f"[KIS 재인증 후 성공] ptr_id={ptr_id}")
+            logger.debug(f"[KIS 재시도 성공] ptr_id={ptr_id}")
         else:
             logger.error(
-                f"[KIS 재인증 후 실패] ptr_id={ptr_id} "
-                f"code={retry_res.getErrorCode()} msg={retry_res.getErrorMessage()} "
-                f"status={retry_res.getResCode()}"
+                f"[KIS 인증 오류] ptr_id={ptr_id} code={retry_res.getErrorCode()} "
+                f"msg={retry_res.getErrorMessage()} status={retry_res.getResCode()}"
             )
         return retry_res
 

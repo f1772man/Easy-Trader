@@ -472,25 +472,26 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
             return f"에너지부족({energy.get('score', 0)}<{threshold})"
 
         energy_filter_ok = _energy_buy_ok("vcpBreakout")
-        if close <= ema20_curr:
-            return {"signal": None, "reason": "", "energy": energy}
+
+        # EMA20 하회 완화:
+        # 단순 하회가 아니라 -1.0% 이상 이탈한 경우만 차단
+        ema20_gap_pct = ((close / ema20_curr) - 1) * 100 if ema20_curr else 0
+
+        if ema20_gap_pct < -1.0:
+            return {
+                "signal": "HOLD",
+                "reason": f"EMA20하회({ema20_gap_pct:.2f}%)",
+                "energy": energy,
+            }
 
         # ── 공통 과열 방지: 이미 많이 오른 위치의 추격매수 제외 ──
         # 응축 여부는 공통 적용하지 않는다. VCP/에너지 조건은 자체 점수로 판단하고,
         # tightRange는 전일고가/피봇R2처럼 별도 응축 확인이 없는 조건에만 선택 적용한다.
         guard_cfg = cfg.get("gcBreakoutGuard", {}) or {}
         if guard_cfg.get("enabled", True):
-            day_rise_pct = _calc_gap_from_open(data, i, close, pi)
             dist_from_ema5 = ((close / ema5_curr) - 1) * 100 if ema5_curr else 0
             dist_from_ema20 = ((close / ema20_curr) - 1) * 100 if ema20_curr else 0
 
-            max_day_rise_pct = _get_intraday_limit(
-                guard_cfg.get("maxDayRisePct", {}) or {},
-                hm_int,
-                until0930=8.0,
-                until1000=6.0,
-                after1000=4.5,
-            )
             max_ema5_dist = _get_intraday_limit(
                 guard_cfg.get("maxDistanceFromEma5Pct", {}) or {},
                 hm_int,
@@ -506,10 +507,23 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 after1000=5.0,
             )
 
-            if day_rise_pct > max_day_rise_pct:
-                return {"signal": "HOLD", "reason": f"당일과열추격차단({day_rise_pct:.1f}%>{max_day_rise_pct:.1f}%)", "energy": energy}
-            if dist_from_ema5 > max_ema5_dist:
-                return {"signal": "HOLD", "reason": f"EMA5이격과열({dist_from_ema5:.1f}%>{max_ema5_dist:.1f}%)", "energy": energy}
+            ema5_slope_pct = ((ema5_curr / ema5_prev) - 1) * 100 if ema5_prev else 0
+
+            if ema5_slope_pct < -0.05:
+                return {
+                    "signal": "HOLD",
+                    "reason": f"EMA5하락추세({ema5_slope_pct:.2f}%)",
+                    "energy": energy,
+                }
+            if dist_from_ema5 > max_ema5_dist and vol_ratio < 3.0:
+                return {
+                    "signal": "HOLD",
+                    "reason": (
+                        f"EMA5이격과열({dist_from_ema5:.1f}%>{max_ema5_dist:.1f}%, "
+                        f"거래량{vol_ratio:.1f}<3.0)"
+                    ),
+                    "energy": energy,
+                }
             if dist_from_ema20 > max_ema20_dist:
                 return {"signal": "HOLD", "reason": f"EMA20이격과열({dist_from_ema20:.1f}%>{max_ema20_dist:.1f}%)", "energy": energy}
 
@@ -592,25 +606,15 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
                 if dist_from_ema5 > max_ema5_dist:
                     return {"signal": "HOLD", "reason": "이격과열", "energy": energy}
 
-                # [3-C] 시간대별 당일 상승률 과열 차단
-                day_open = None
-                for k in range(i + 1):
-                    if str(data[k][pi["time"]]).split("_")[0] == today:
-                        day_open = data[k][pi["open"]]
-                        break
+                # [3-C] EMA5 방향성 체크 (하락 추세 시 재진입 차단)
+                ema5_slope_pct = ((ema5_curr / ema5_prev) - 1) * 100 if ema5_prev else 0
 
-                day_rise_pct = ((close / day_open) - 1) * 100 if day_open else 0
-                day_rise_cfg = guard_cfg.get("maxDayRisePct", {}) or {}
-                max_day_rise_pct = _get_intraday_limit(
-                    day_rise_cfg,
-                    hm_int,
-                    until0930=8.0,
-                    until1000=6.0,
-                    after1000=4.5,
-                )
-
-                if day_rise_pct > max_day_rise_pct:
-                    return {"signal": "HOLD", "reason": "당일과열추격차단", "energy": energy}
+                if ema5_slope_pct < -0.05:
+                    return {
+                        "signal": "HOLD",
+                        "reason": f"EMA5하락추세({ema5_slope_pct:.2f}%)",
+                        "energy": energy,
+                    }
 
             else:
                 # 하위 호환: 가드 비활성화 시 기존 단일 이격 기준 사용
