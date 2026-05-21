@@ -5,7 +5,7 @@
 # Cloud Scheduler: 15:40 KST (월~금)
 # ============================================================
 
-set -euo pipefail
+set -uo pipefail  # -e 제거: 중간 실패 시 텔레그램 에러 보고 후 종료하도록 수동 처리
 
 # ── 설정 ────────────────────────────────────────────────────
 PROJECT_DIR="/home/f1227/easy-trader"
@@ -30,9 +30,17 @@ send_telegram() {
         -d text="${msg}" > /dev/null
 }
 
+die() {
+    local msg="$1"
+    echo "[ERROR] ${msg}" >&2
+    send_telegram "❌ *[daily_review 오류] ${TODAY}*
+
+${msg}"
+    exit 1
+}
+
 # ── 1단계: 로그 수집 ────────────────────────────────────────
 echo "[1/4] 오늘 로그 수집 중..."
-# 수정
 docker logs "${CONTAINER_NAME}" \
     --since "${TODAY}T08:40:00" \
     --until "${TODAY}T15:35:00" \
@@ -42,13 +50,15 @@ LINE_COUNT=$(wc -l < "${LOG_FILE}")
 echo "  → ${LINE_COUNT}줄 수집 완료: ${LOG_FILE}"
 
 if [ "${LINE_COUNT}" -lt 10 ]; then
-    send_telegram "⚠️ [daily_review] 로그가 너무 적습니다 (${LINE_COUNT}줄). 컨테이너 상태를 확인하세요."
-    exit 1
+    die "로그가 너무 적습니다 (${LINE_COUNT}줄). 컨테이너 상태를 확인하세요."
 fi
 
 # ── 2단계: Claude Code 분석 ─────────────────────────────────
-# ── 2단계: Claude Code 분석 ─────────────────────────────────
 echo "[2/4] Claude Code 분석 중..."
+
+# Claude 실행 전 git 스냅샷 (pre-existing 변경사항과 구분)
+cd "${PROJECT_DIR}"
+PRE_DIFF=$(git diff --name-only 2>/dev/null || true)
 
 cat > /tmp/claude_prompt.txt << 'PROMPT_EOF'
 오늘 장중 로그 파일을 읽고 아래 항목을 분석해줘.
@@ -70,20 +80,32 @@ cat > /tmp/claude_prompt.txt << 'PROMPT_EOF'
 - 수정 없으면 '수정 없음' 명시
 PROMPT_EOF
 
-cd "${PROJECT_DIR}"
+# stdin을 /dev/null로 닫아 3초 대기 경고 방지
 claude --print "$(cat /tmp/claude_prompt.txt)
 
 로그:
-$(tail -n 500 ${LOG_FILE})" > "${ANALYSIS_FILE}" 2>&1
+$(tail -n 500 "${LOG_FILE}")" < /dev/null > "${ANALYSIS_FILE}" 2>&1
+CLAUDE_EXIT=$?
+
+if [ ${CLAUDE_EXIT} -ne 0 ] || [ "$(wc -c < "${ANALYSIS_FILE}")" -lt 50 ]; then
+    die "Claude 분석 실패 (exit=${CLAUDE_EXIT}, output=$(cat "${ANALYSIS_FILE}" | head -c 200))"
+fi
 
 # ── 3단계: 수정 여부 판단 ───────────────────────────────────
 echo "[3/4] 수정 여부 확인 중..."
 
-# git diff로 실제 변경 감지
-DIFF_OUTPUT=$(git diff --name-only 2>/dev/null || echo "")
+# Claude 실행 후 새로 생긴 변경사항만 감지 (pre-existing 제외)
+POST_DIFF=$(git diff --name-only 2>/dev/null || true)
+NEW_CHANGES=""
+for f in ${POST_DIFF}; do
+    if ! echo "${PRE_DIFF}" | grep -qx "${f}"; then
+        NEW_CHANGES="${NEW_CHANGES} ${f}"
+    fi
+done
+NEW_CHANGES=$(echo "${NEW_CHANGES}" | xargs)  # trim
 
-if [ -n "${DIFF_OUTPUT}" ]; then
-    echo "  → 코드 수정 감지: ${DIFF_OUTPUT}"
+if [ -n "${NEW_CHANGES}" ]; then
+    echo "  → 코드 수정 감지: ${NEW_CHANGES}"
     MODIFIED=true
 else
     echo "  → 수정 없음"
@@ -93,12 +115,11 @@ fi
 # ── 4단계: 텔레그램 보고 ────────────────────────────────────
 echo "[4/4] 텔레그램 보고 중..."
 
-# 분석 결과 요약 (앞 800자)
-SUMMARY=$(head -c 800 "${ANALYSIS_FILE}")
+# 분석 결과 요약 (줄 단위로 잘라 한글 깨짐 방지)
+SUMMARY=$(head -n 30 "${ANALYSIS_FILE}" | head -c 1500)
 
 if [ "${MODIFIED}" = true ]; then
-    # 수정된 경우: diff 포함 보고
-    DIFF_DETAIL=$(git diff --stat 2>/dev/null | head -20)
+    DIFF_DETAIL=$(git diff --stat -- ${NEW_CHANGES} 2>/dev/null | head -20)
     send_telegram "🔧 *[Easy Trader 일일 리뷰] ${TODAY}*
 
 📋 *분석 요약*
@@ -109,10 +130,10 @@ ${SUMMARY}
 ${DIFF_DETAIL}
 \`\`\`
 
-⚠️ 확인 후 재배포 필요: \`./deploy.sh\`"
+⚠️ 확인 후 재배포 필요: \`./rebuild.sh\`"
 
-    # git commit (재배포는 수동)
-    git add -A
+    # Claude가 수정한 파일만 커밋 (git add -A 사용 금지)
+    git add -- ${NEW_CHANGES}
     git commit -m "auto: ${TODAY} 일일 리뷰 자동 수정"
     echo "  → git commit 완료 (재배포는 수동)"
 

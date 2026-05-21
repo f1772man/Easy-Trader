@@ -4,3 +4,7 @@ secrets/
 kis_config/
 *.csv
 __pycache__/
+*.log
+*.txt
+!CLAUDE.md
+!requirements.txt
