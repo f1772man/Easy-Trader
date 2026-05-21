@@ -560,3 +560,38 @@ def build_1min_candles_from_output2(output2: List[Dict[str, Any]]) -> List[List[
         cd = buckets[bucket_dt]
         out.append([cd.ts.strftime("%Y%m%d_%H%M"), cd.o, cd.h, cd.l, cd.c, cd.v])
     return out
+
+# ── 지수 등락률 조회 ──────────────────────────────────
+def get_index_change_rate(index_code: str) -> Optional[float]:
+    """
+    코스피/코스닥 지수 등락률 조회 (FHPUP02100000)
+    index_code: "0001" (코스피), "1001" (코스닥)
+    반환: 전일 대비 등락률(%) or None (데이터 미준비 포함)
+
+    주의: 프리마켓(08:00~09:00)에는 0 반환될 수 있음 (KIS 공식 안내)
+    """
+    res = _url_fetch(
+        "/uapi/domestic-stock/v1/quotations/inquire-index-price",
+        "FHPUP02100000", "",
+        {
+            "FID_COND_MRKT_DIV_CODE": "U",
+            "FID_INPUT_ISCD": index_code,
+        },
+    )
+    if not res.isOK():
+        logger.warning(f"[지수조회] {index_code} API 실패")
+        return None
+    try:
+        output = getattr(res.getBody(), "output", None)
+        if not output or not isinstance(output, dict):
+            logger.warning(f"[지수조회] {index_code} output 없음 또는 형식 오류")
+            return None
+        prpr = float(output.get("bstp_nmix_prpr", 0) or 0)
+        ctrt = float(output.get("bstp_nmix_prdy_ctrt", 0) or 0)
+        if prpr == 0:
+            logger.warning(f"[지수조회] {index_code} 지수 0 반환 (데이터 미준비)")
+            return None
+        return ctrt
+    except Exception as e:
+        logger.error(f"[지수조회] {index_code} 파싱 실패: {e}")
+        return None

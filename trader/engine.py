@@ -558,64 +558,115 @@ class TradingEngine:
 
     def _load_market_gate_phase2(self):
         """
-        [2단계 — 09:00 이후 첫 tick]
+        [2단계 — 09:00~09:10]
         BLOCK + 고신뢰(_gate_block_pending=True) 인 경우에만 실행.
-        코스닥 지수(1001) 현재 등락률을 조회해 +1.5% 이상이면 BLOCK을 해제한다.
+        코스피(0001) + 코스닥(1001) 복합 점수로 BLOCK 해제 여부를 결정한다.
 
-        - BLOCK 해제 시: scan_hm=925, top_n=5 (BEAR 고신뢰 수준으로 완화)
-        - BLOCK 유지 시: scan_hm=930, top_n=5 그대로
+        복합 점수 산출 (3년 실데이터 기반):
+          코스닥 (가중치 높음 — 소형주 직접 연동):
+            ≥ +1.5% → +4  (소형주 반등 72%)
+            ≥ +0.5% → +2  (소형주 반등 53%)
+            ≥  0.0% →  0  (소형주 반등 44%)
+            ≥ -0.5% → -1  (소형주 반등 38%)
+            ≥ -1.5% → -2  (소형주 반등 32%)
+            <  -1.5% → -3  (소형주 반등 18%)
+
+          코스피 (보조 — 외국인 수급 방향):
+            ≥ +1.5% → +2  (대형주 반등 69%)
+            ≥ +0.5% → +1  (대형주 반등 58%)
+            ≥  0.0% →  0
+            ≥ -0.5% → -1
+            ≥ -1.5% → -1
+            <  -1.5% → -2
+
+          복합 점수 → scan_hm / top_n:
+            ≥ 5 → 09:10 / 7종목  (강반등 — 조기 진입)
+            ≥ 2 → 09:15 / 7종목  (보통반등)
+            ≥ 0 → 09:20 / 5종목  (중립)
+            ≥ -2 → 09:25 / 5종목 (약세)
+            <  -2 → 09:30 / 5종목 (강약세 — 최대 지연)
         """
         if not self._gate_block_pending:
             return
 
         from trader.telegram import send_telegram
+        from trader.kis_api import get_index_change_rate
 
         try:
-            res = _url_fetch(
-                "/uapi/domestic-stock/v1/quotations/inquire-index-price",
-                "FHPUP02100000", "",
-                {
-                    "FID_COND_MRKT_DIV_CODE": "U",
-                    "FID_INPUT_ISCD": "1001",   # 코스닥
-                },
-            )
-            if not res.isOK():
-                logger.warning("[마켓게이트][2단계] 코스닥 지수 조회 실패 → BLOCK 유지")
-                self._gate_block_pending = False
-                return
+            # ── 1. 코스닥 조회 ──────────────────────────────
+            kosdaq_ctrt = get_index_change_rate("1001")
+            if kosdaq_ctrt is None:
+                logger.warning("[마켓게이트][2단계] 코스닥 지수 미준비 → 다음 틱 재시도")
+                return  # pending=True 유지 → 재시도
 
-            output      = res.getBody().output
-            kosdaq_prpr = float(output.get("bstp_nmix_prpr", 0) or 0)
-            kosdaq_ctrt = float(output.get("bstp_nmix_prdy_ctrt", 0) or 0)  # 전일 대비 등락률
+            # ── 2. 코스피 조회 ──────────────────────────────
+            kospi_ctrt = get_index_change_rate("0001")
+            if kospi_ctrt is None:
+                logger.warning("[마켓게이트][2단계] 코스피 지수 미준비 → 코스피 0으로 처리")
+                kospi_ctrt = 0.0  # 코스피 실패 시 중립으로 처리
 
-            if kosdaq_prpr == 0:
-                logger.warning(
-                    "[마켓게이트][2단계] 코스닥 지수 0 반환 (데이터 미준비) → 다음 틱 재시도"
-                )
-                # _gate_block_pending = True 유지 → 900~910 범위 내 다음 틱에서 재시도
-                return
+            # ── 3. 복합 점수 산출 ───────────────────────────
+            # 코스닥 점수 (가중치 높음)
+            if kosdaq_ctrt >= 1.5:   kosdaq_score = 4
+            elif kosdaq_ctrt >= 0.5: kosdaq_score = 2
+            elif kosdaq_ctrt >= 0.0: kosdaq_score = 0
+            elif kosdaq_ctrt >= -0.5: kosdaq_score = -1
+            elif kosdaq_ctrt >= -1.5: kosdaq_score = -2
+            else:                    kosdaq_score = -3
 
-            if kosdaq_ctrt >= 1.5:
-                # BLOCK 해제 → BEAR 고신뢰 수준으로 완화
+            # 코스피 점수 (보조)
+            if kospi_ctrt >= 1.5:    kospi_score = 2
+            elif kospi_ctrt >= 0.5:  kospi_score = 1
+            elif kospi_ctrt >= 0.0:  kospi_score = 0
+            elif kospi_ctrt >= -0.5: kospi_score = -1
+            elif kospi_ctrt >= -1.5: kospi_score = -1
+            else:                    kospi_score = -2
+
+            total_score = kosdaq_score + kospi_score
+
+            # ── 4. scan_hm / top_n 결정 ─────────────────────
+            if total_score >= 5:
+                self._scan_hm      = 910
+                self._market_top_n = 7
+                result = f"강반등 → 09:10 조기·7종목"
+            elif total_score >= 2:
+                self._scan_hm      = 915
+                self._market_top_n = 7
+                result = f"보통반등 → 09:15·7종목"
+            elif total_score >= 0:
+                self._scan_hm      = 920
+                self._market_top_n = 5
+                result = f"중립 → 09:20·5종목"
+            elif total_score >= -2:
                 self._scan_hm      = 925
                 self._market_top_n = 5
-                label = (
-                    f"✅ BLOCK 해제 — 코스닥 {kosdaq_ctrt:+.2f}% ≥ +1.5%\n"
-                    f"→ 09:25 지연·5종목으로 완화"
-                )
+                result = f"약세 → 09:25·5종목"
             else:
-                label = (
-                    f"⛔ BLOCK 유지 — 코스닥 {kosdaq_ctrt:+.2f}% < +1.5%\n"
-                    f"→ 09:30 지연·5종목 유지"
-                )
+                self._scan_hm      = 930
+                self._market_top_n = 5
+                result = f"강약세 → 09:30 최대지연·5종목"
 
             self._gate_block_pending = False  # 2단계 완료
 
-            logger.info(f"[마켓게이트][2단계] {label.replace(chr(10), ' | ')}")
-            send_telegram(f"📊 [마켓게이트 확정] {label}")
+            kospi_label = (
+                f"{kospi_ctrt:+.2f}%"
+                if kospi_ctrt != 0.0
+                else "조회실패(0으로 처리)"
+            )
+            label = (
+                f"코스닥 {kosdaq_ctrt:+.2f}%(점수:{kosdaq_score:+d}) | "
+                f"코스피 {kospi_label}(점수:{kospi_score:+d}) | "
+                f"합계:{total_score:+d} → {result}"
+            )
+            logger.info(f"[마켓게이트][2단계] {label}")
+            send_telegram(
+                f"📊 [마켓게이트 확정] {result}\n"
+                f"코스닥 {kosdaq_ctrt:+.2f}% / 코스피 {kospi_label}\n"
+                f"복합점수: {total_score:+d}"
+            )
 
         except Exception as e:
-            logger.warning(f"[마켓게이트][2단계] 오류({e}) → BLOCK 유지")
+            logger.warning(f"[마켓게이트][2단계] 오류({e}) → BLOCK 유지(09:30)")
             self._gate_block_pending = False
 
     def _filter_by_trade_amount(self):
