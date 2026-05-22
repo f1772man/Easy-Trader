@@ -366,13 +366,33 @@ class TradingEngine:
             return
 
         with self._positions_lock:
-            holding_count = len(self._positions)
+            positions = dict(self._positions)
 
         self.firebase.update_heartbeat({
             "running": True,
             "last_tick": self.last_tick_time,
-            "holding_count": holding_count,
+            "holding_count": len(positions),
         })
+
+        # 평가손익 계산 후 daily_summary 갱신 (15초마다)
+        try:
+            unrealized_pnl = 0
+            for sym, pos in positions.items():
+                last_candles = self._collector.get_1min(sym) if self._collector else []
+                last_price = last_candles[-1][4] if last_candles else 0  # 마지막 1분봉 종가
+                entry_price = pos.get("entry_price", 0)
+                qty = pos.get("qty", 0)
+                if last_price and entry_price:
+                    unrealized_pnl += int((last_price - entry_price) * qty)
+
+            today = now.strftime("%Y-%m-%d")
+            self._fs.collection("daily_trade_summary").document(today).set(
+                {"unrealized_pnl": unrealized_pnl, "updated_at": now.isoformat()},
+                merge=True,
+            )
+        except Exception as e:
+            logger.error(f"[daily_summary] unrealized 갱신 실패: {e}")
+
         self._last_heartbeat_ts = ts
 
     def _fetch_holiday_once(self, today_str: str) -> str:
@@ -1281,6 +1301,64 @@ class TradingEngine:
                 self._last_order_keys[symbol] = key
                 self._last_order_ts[symbol] = now_ts
 
+    # ── 당일 거래 요약 갱신 ────────────────────────────────
+    def _update_daily_summary(self, symbol: str, name: str, price: int,
+                               qty: int, profit_pct: float, entry_price: float):
+        """
+        매도 체결 시마다 daily_trade_summary/{date} 문서를 누적 갱신합니다.
+        Firestore 트랜잭션으로 race condition을 방지합니다.
+        """
+        try:
+            today = datetime.now(KST).strftime("%Y-%m-%d")
+            ref = self._fs.collection("daily_trade_summary").document(today)
+
+            if not entry_price:
+                logger.warning(f"[daily_summary] {symbol} entry_price 없음 → pnl 계산 스킵")
+                return
+            pnl = int((price - entry_price) * qty)
+            is_win = profit_pct > 0
+
+            @firestore.transactional
+            def _txn(transaction, ref):
+                snapshot = ref.get(transaction=transaction)
+                if snapshot.exists:
+                    d = snapshot.to_dict() or {}
+                else:
+                    d = {
+                        "date": today,
+                        "realized_pnl": 0,
+                        "trade_count": 0,
+                        "win_count": 0,
+                        "loss_count": 0,
+                        "win_rate": 0.0,
+                        "updated_at": "",
+                    }
+
+                d["realized_pnl"] = d.get("realized_pnl", 0) + pnl
+                d["trade_count"]  = d.get("trade_count",  0) + 1
+                d["win_count"]    = d.get("win_count",    0) + (1 if is_win else 0)
+                d["loss_count"]   = d.get("loss_count",   0) + (0 if is_win else 1)
+
+                total = d["win_count"] + d["loss_count"]
+                d["win_rate"] = round(d["win_count"] / total * 100, 1) if total else 0.0
+                d["updated_at"] = datetime.now(KST).isoformat()
+
+                # unrealized_pnl은 heartbeat에서 merge=True로만 관리 → 트랜잭션에서 제외
+                d.pop("unrealized_pnl", None)
+                transaction.set(ref, d, merge=True)
+
+            txn = self._fs.transaction()
+            _txn(txn, ref)
+
+            logger.info(
+                f"[daily_summary] {name}({symbol}) 매도 반영 | "
+                f"pnl={pnl:+,}원 profit={profit_pct:+.2f}% | "
+                f"today={today}"
+            )
+
+        except Exception as e:
+            logger.error(f"[daily_summary] 갱신 실패: {e}")
+
     # ── 매수/매도 실행 ─────────────────────────────────
     def _execute_buy(self, symbol: str, price: int, reason: str, energy: dict) -> bool:
         with self._positions_lock:
@@ -1372,6 +1450,10 @@ class TradingEngine:
                 },
             )
             notify_sell(symbol, raw_name, price, reason, profit_pct)
+            self._update_daily_summary(
+                symbol, raw_name, price,
+                qty, profit_pct, entry_price,
+            )
             return True
 
         return False
