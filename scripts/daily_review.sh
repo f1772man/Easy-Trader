@@ -42,8 +42,8 @@ ${msg}"
 # ── 1단계: 로그 수집 ────────────────────────────────────────
 echo "[1/4] 오늘 로그 수집 중..."
 docker logs "${CONTAINER_NAME}" \
-    --since "${TODAY}T08:40:00" \
-    --until "${TODAY}T15:35:00" \
+    --since "${TODAY}T08:40:00+09:00" \
+    --until "${TODAY}T15:35:00+09:00" \
     > "${LOG_FILE}" 2>&1
 
 LINE_COUNT=$(wc -l < "${LOG_FILE}")
@@ -84,7 +84,7 @@ PROMPT_EOF
 claude --print "$(cat /tmp/claude_prompt.txt)
 
 로그:
-$(tail -n 500 "${LOG_FILE}")" < /dev/null > "${ANALYSIS_FILE}" 2>&1
+$(cat "${LOG_FILE}")" < /dev/null > "${ANALYSIS_FILE}" 2>&1
 CLAUDE_EXIT=$?
 
 if [ ${CLAUDE_EXIT} -ne 0 ] || [ "$(wc -c < "${ANALYSIS_FILE}")" -lt 50 ]; then

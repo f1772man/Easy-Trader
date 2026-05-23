@@ -265,6 +265,11 @@ class TradingEngine:
 
         hm = now.hour * 100 + now.minute
 
+        # 휴장일 체크: 시간 무관하게 하루 1번 (워밍업 윈도우 밖에서 재시작해도 동작)
+        self._check_holiday_once(now)
+        if self._today_opnd_yn != "Y":
+            return
+
         # 08:50~08:59 전일 보유 종목 전일 1분봉/snapshot 선로딩
         self._maybe_premarket_warmup(now)
 
@@ -347,6 +352,8 @@ class TradingEngine:
         self._stop_loss_pending.clear()
         self._trade_filter_done = False
         self._market_open_notified = False
+        self._holiday_checked_date = ""   # 다음날 휴장일 재조회를 위해 리셋
+        self._today_opnd_yn = "Y"         # 기본값 복원
 
         # 마켓 게이트 리셋 (다음날 새로 로드)
         self._market_gate = "UNKNOWN"
@@ -395,6 +402,21 @@ class TradingEngine:
 
         self._last_heartbeat_ts = ts
 
+    def _check_holiday_once(self, now: datetime):
+        """휴장일 여부를 하루 1번만 조회 — _tick() 초입에서 시간 무관하게 호출"""
+        today_str = now.strftime("%Y%m%d")
+        if self._holiday_checked_date == today_str:
+            return
+        try:
+            opnd_yn = self._fetch_holiday_once(today_str)
+        except Exception as e:
+            logger.warning(f"[휴장일조회] 실패({e}) → 개장으로 간주")
+            opnd_yn = "Y"
+        self._today_opnd_yn = opnd_yn
+        self._holiday_checked_date = today_str
+        if opnd_yn != "Y":
+            logger.info(f"[휴장일조회] {today_str} 휴장일 → 모든 매매 처리 스킵")
+
     def _fetch_holiday_once(self, today_str: str) -> str:
         """chk_holiday API 1페이지만 조회 (재귀 없음)"""
         import trader.kis_auth as ka
@@ -430,20 +452,8 @@ class TradingEngine:
         if not (850 <= hm < 900):
             return
 
-        # 1. 휴장일 체크는 하루 1번만
-        if self._holiday_checked_date != today_str:
-            try:
-                opnd_yn = self._fetch_holiday_once(today_str)
-            except Exception as e:
-                logger.warning(f"[장전워밍업] 휴장일 조회 실패({e}) → 개장으로 간주")
-                opnd_yn = "Y"
-            self._today_opnd_yn = opnd_yn
-            self._holiday_checked_date = today_str
-
-        if self._today_opnd_yn != "Y":
-            logger.info(f"[장전워밍업] {today_str} 휴장일 → 스킵")
-            self._premarket_warmup_done_date = today_str
-            return
+        # 휴장일 체크는 _tick() → _check_holiday_once()에서 이미 완료됨
+        # → 여기까지 도달한 경우 opnd_yn == "Y" 확정
 
         # 2. 전일 보유 종목을 거래대금 필터와 무관하게 감시목록/WS에 강제 편입
         with self._positions_lock:
