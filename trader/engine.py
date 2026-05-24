@@ -265,17 +265,19 @@ class TradingEngine:
 
         hm = now.hour * 100 + now.minute
 
-        # 휴장일 체크: 시간 무관하게 하루 1번 (워밍업 윈도우 밖에서 재시작해도 동작)
+        # 휴장일 체크: 매일 08:50 이전 첫 틱에서 확정 (시간 무관)
         self._check_holiday_once(now)
-        if self._today_opnd_yn != "Y":
-            return
 
-        # 08:50~08:59 전일 보유 종목 전일 1분봉/snapshot 선로딩
+        # 08:50~08:59 장전 워밍업 (휴장일 체크는 위에서 이미 완료)
         self._maybe_premarket_warmup(now)
 
         if not (900 <= hm <= 1530):
-            if hm >= 1531:
+            if hm >= 1531 and self._today_opnd_yn == "Y":  # 휴장일엔 flush 스킵
                 self._flush_market_data_once(now.strftime("%Y%m%d"))
+            return
+
+        # 휴장일이면 매매 전체 차단
+        if self._today_opnd_yn != "Y":
             return
 
         # ── 마켓 게이트 2단계 확정 (09:00~09:10, BLOCK 대기 중인 경우만) ──
@@ -418,23 +420,12 @@ class TradingEngine:
             logger.info(f"[휴장일조회] {today_str} 휴장일 → 모든 매매 처리 스킵")
 
     def _fetch_holiday_once(self, today_str: str) -> str:
-        """chk_holiday API 1페이지만 조회 (재귀 없음)"""
-        import trader.kis_auth as ka
-        params = {
-            "BASS_DT": today_str,
-            "CTX_AREA_FK": "",
-            "CTX_AREA_NK": ""
-        }
-        res = ka._url_fetch(
-            "/uapi/domestic-stock/v1/quotations/chk-holiday",
-            "CTCA0903R", "", params
-        )
-        if not res.isOK():
+        """kis_api._fetch_holiday_output 사용 (1회 호출, 재귀 없음)"""
+        from trader.kis_api import _fetch_holiday_output
+        output = _fetch_holiday_output(today_str)
+        if not output:
             logger.warning("[휴장일조회] API 실패 → 개장으로 간주")
             return "Y"
-        output = res.getBody().output
-        if not isinstance(output, list):
-            output = [output]
         df = pd.DataFrame(output)
         if df.empty or "opnd_yn" not in df.columns:
             return "Y"
@@ -452,10 +443,13 @@ class TradingEngine:
         if not (850 <= hm < 900):
             return
 
-        # 휴장일 체크는 _tick() → _check_holiday_once()에서 이미 완료됨
-        # → 여기까지 도달한 경우 opnd_yn == "Y" 확정
+        # 휴장일이면 스킵 (_tick에서 _check_holiday_once 완료됨)
+        if self._today_opnd_yn != "Y":
+            logger.info(f"[장전워밍업] {today_str} 휴장일 → 스킵")
+            self._premarket_warmup_done_date = today_str
+            return
 
-        # 2. 전일 보유 종목을 거래대금 필터와 무관하게 감시목록/WS에 강제 편입
+        # 1. 전일 보유 종목을 거래대금 필터와 무관하게 감시목록/WS에 강제 편입
         with self._positions_lock:
             holding_symbols = list(self._positions.keys())
 
