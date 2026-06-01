@@ -586,25 +586,31 @@ class TradingEngine:
         BLOCK + 고신뢰(_gate_block_pending=True) 인 경우에만 실행.
         코스피(0001) + 코스닥(1001) 복합 점수로 BLOCK 해제 여부를 결정한다.
 
-        복합 점수 산출 (3년 실데이터 기반):
-          코스닥 (가중치 높음 — 소형주 직접 연동):
-            ≥ +1.5% → +4  (소형주 반등 72%)
-            ≥ +0.5% → +2  (소형주 반등 53%)
+        복합 점수 산출 (3년 실데이터 기반, 188만건):
+          [분석 근거]
+          - 중간 구간(±0.5% 내): 코스피/코스닥 예측력 차이 1%p 이내 → 동등 처리
+          - 강하락(-1.5% 이하): 코스피가 오히려 더 강한 예측력 → 코스피 하향 비중 동등
+          - 강반등(+1.5% 이상): 코스닥 72% vs 코스피 61% → 코스닥 우위 유지 (3:2 비율)
+
+          코스닥 (최대 ±3 — 강반등 구간에서만 우위):
+            ≥ +1.5% → +3  (소형주 반등 72%)
+            ≥ +0.5% → +1  (소형주 반등 53%)
             ≥  0.0% →  0  (소형주 반등 44%)
             ≥ -0.5% → -1  (소형주 반등 38%)
-            ≥ -1.5% → -2  (소형주 반등 32%)
-            <  -1.5% → -3  (소형주 반등 18%)
+            ≥ -1.5% → -1  (소형주 반등 32%, 코스피와 유사)
+            <  -1.5% → -2  (소형주 반등 18%, 코스피 26%보다 낮음)
 
-          코스피 (보조 — 외국인 수급 방향):
+          코스피 (최대 ±2 — 중간/하락 구간에서 동등):
             ≥ +1.5% → +2  (대형주 반등 69%)
             ≥ +0.5% → +1  (대형주 반등 58%)
             ≥  0.0% →  0
             ≥ -0.5% → -1
             ≥ -1.5% → -1
-            <  -1.5% → -2
+            <  -1.5% → -2  (대형주 반등 26%, 소형주보다 높음)
 
-          복합 점수 → scan_hm / top_n:
-            ≥ 5 → 09:10 / 7종목  (강반등 — 조기 진입)
+          복합 점수 범위: -4 ~ +5
+          점수 → scan_hm / top_n:
+            ≥ 4 → 09:10 / 7종목  (강반등 — 조기 진입)
             ≥ 2 → 09:15 / 7종목  (보통반등)
             ≥ 0 → 09:20 / 5종목  (중립)
             ≥ -2 → 09:25 / 5종목 (약세)
@@ -616,40 +622,86 @@ class TradingEngine:
         from trader.telegram import send_telegram
         from trader.kis_api import get_index_change_rate
 
-        try:
-            # ── 1. 코스닥 조회 ──────────────────────────────
-            kosdaq_ctrt = get_index_change_rate("1001")
-            if kosdaq_ctrt is None:
-                logger.warning("[마켓게이트][2단계] 코스닥 지수 미준비 → 다음 틱 재시도")
-                return  # pending=True 유지 → 재시도
+        def _retry_index_change_rate(index_code: str, label: str, retry: int = 3, delay: float = 0.5) -> Optional[float]:
+            """지수 등락률 조회 — 09:00 직후 데이터 미준비에 대비해 최대 retry회 재시도."""
+            for attempt in range(1, retry + 1):
+                value = get_index_change_rate(index_code)
+                if value is not None:
+                    if attempt > 1:
+                        logger.info(
+                            f"[마켓게이트][2단계] {label} 지수 조회 성공 "
+                            f"({attempt}/{retry}) | 등락률={value:+.2f}%"
+                        )
+                    return value
 
-            # ── 2. 코스피 조회 ──────────────────────────────
-            kospi_ctrt = get_index_change_rate("0001")
+                logger.warning(
+                    f"[마켓게이트][2단계] {label} 지수 미준비 "
+                    f"({attempt}/{retry})"
+                )
+                if attempt < retry:
+                    time.sleep(delay)
+
+            return None
+
+        try:
+            # ── 1. 코스닥 조회 (최대 3회) ───────────────────
+            kosdaq_ctrt = _retry_index_change_rate("1001", "코스닥")
+            if kosdaq_ctrt is None:
+                logger.warning("[마켓게이트][2단계] 코스닥 지수 3회 조회 실패 → 다음 틱 재시도")
+                return  # pending=True 유지 → 다음 틱에서 다시 3회 재시도
+
+            # ── 2. 코스피 조회 (최대 3회) ───────────────────
+            kospi_failed = False
+            kospi_ctrt = _retry_index_change_rate("0001", "코스피")
             if kospi_ctrt is None:
-                logger.warning("[마켓게이트][2단계] 코스피 지수 미준비 → 코스피 0으로 처리")
+                kospi_failed = True
+                logger.warning("[마켓게이트][2단계] 코스피 지수 3회 조회 실패 → 코스피 0으로 처리")
                 kospi_ctrt = 0.0  # 코스피 실패 시 중립으로 처리
 
-            # ── 3. 복합 점수 산출 ───────────────────────────
-            # 코스닥 점수 (가중치 높음)
-            if kosdaq_ctrt >= 1.5:   kosdaq_score = 4
-            elif kosdaq_ctrt >= 0.5: kosdaq_score = 2
-            elif kosdaq_ctrt >= 0.0: kosdaq_score = 0
-            elif kosdaq_ctrt >= -0.5: kosdaq_score = -1
-            elif kosdaq_ctrt >= -1.5: kosdaq_score = -2
-            else:                    kosdaq_score = -3
+            # ── 3. 복합 점수 산출 (3:2 비율 — 강반등 구간만 코스닥 우위) ────
+            # 코스닥 점수 (최대 ±3)
+            # 강반등(+1.5%↑)에서만 코스피 대비 우위 (72% vs 61%)
+            # 중간/하락 구간은 코스피와 예측력 유사 → 점수 동등
+            if kosdaq_ctrt >= 1.5:    kosdaq_score = 3   # 소형주 반등 72%
+            elif kosdaq_ctrt >= 0.5:  kosdaq_score = 1   # 소형주 반등 53%
+            elif kosdaq_ctrt >= 0.0:  kosdaq_score = 0   # 소형주 반등 44%
+            elif kosdaq_ctrt >= -0.5: kosdaq_score = -1  # 소형주 반등 38%
+            elif kosdaq_ctrt >= -1.5: kosdaq_score = -1  # 소형주 반등 32% (코스피와 유사)
+            else:                     kosdaq_score = -2  # 소형주 반등 18% (코스피 26%보다 낮음)
 
-            # 코스피 점수 (보조)
-            if kospi_ctrt >= 1.5:    kospi_score = 2
-            elif kospi_ctrt >= 0.5:  kospi_score = 1
-            elif kospi_ctrt >= 0.0:  kospi_score = 0
-            elif kospi_ctrt >= -0.5: kospi_score = -1
-            elif kospi_ctrt >= -1.5: kospi_score = -1
-            else:                    kospi_score = -2
+            # 코스피 점수 (최대 ±2)
+            # 중간/하락 구간에서 코스닥과 동등, 강하락(-1.5%↓)에서 더 강한 예측력
+            if kospi_ctrt >= 1.5:     kospi_score = 2    # 대형주 반등 69%
+            elif kospi_ctrt >= 0.5:   kospi_score = 1    # 대형주 반등 58%
+            elif kospi_ctrt >= 0.0:   kospi_score = 0
+            elif kospi_ctrt >= -0.5:  kospi_score = -1
+            elif kospi_ctrt >= -1.5:  kospi_score = -1
+            else:                     kospi_score = -2   # 대형주 반등 26% (소형주 18%보다 높음)
 
-            total_score = kosdaq_score + kospi_score
+            total_score = kosdaq_score + kospi_score  # 범위: -4 ~ +5
+
+            # ── 3-1. 사후 보정 ───────────────────────────────
+            # 보정 1: 코스피 급락(-1.5% 이하) → 외국인 대형주 매도 지속 신호
+            #         코스닥 반등 여부와 무관하게 최소 09:25 보장
+            if kospi_ctrt <= -1.5 and total_score > -2:
+                logger.info(
+                    f"[마켓게이트][2단계] 코스피 급락({kospi_ctrt:+.2f}%) → "
+                    f"총점 {total_score:+d} → -2 보정 (최소 09:25)"
+                )
+                total_score = -2
+
+            # 보정 2: 양시장 동반 급락(코스닥≤-1.0% AND 코스피≤-1.0%) → 09:30 강제
+            #         BLOCK 상태에서 양시장 모두 -1% 이상 하락이면 진입 최대 지연
+            if kosdaq_ctrt <= -1.0 and kospi_ctrt <= -1.0:
+                logger.info(
+                    f"[마켓게이트][2단계] 양시장 동반 급락 "
+                    f"(코스닥{kosdaq_ctrt:+.2f}% / 코스피{kospi_ctrt:+.2f}%) → "
+                    f"총점 {total_score:+d} → -3 강제 (09:30)"
+                )
+                total_score = -3
 
             # ── 4. scan_hm / top_n 결정 ─────────────────────
-            if total_score >= 5:
+            if total_score >= 4:
                 self._scan_hm      = 910
                 self._market_top_n = 7
                 result = f"강반등 → 09:10 조기·7종목"
@@ -672,11 +724,7 @@ class TradingEngine:
 
             self._gate_block_pending = False  # 2단계 완료
 
-            kospi_label = (
-                f"{kospi_ctrt:+.2f}%"
-                if kospi_ctrt != 0.0
-                else "조회실패(0으로 처리)"
-            )
+            kospi_label = "조회실패(0으로 처리)" if kospi_failed else f"{kospi_ctrt:+.2f}%"
             label = (
                 f"코스닥 {kosdaq_ctrt:+.2f}%(점수:{kosdaq_score:+d}) | "
                 f"코스피 {kospi_label}(점수:{kospi_score:+d}) | "
@@ -1095,8 +1143,10 @@ class TradingEngine:
 
         signal = result["signal"]
         reason = result["reason"]
+        """
         if signal not in ("BUY", "SELL") and reason:
             logger.info(f"[{display}] HOLD | {reason}")
+        """
         energy = result["energy"]
         close = int(df["close"].iloc[i])
 
@@ -1543,7 +1593,14 @@ class TradingEngine:
         logger.info(f"[워밍업] 완료 — 성공:{ok} / 실패:{fail}")
 
         # 완료 메시지: 전체 감시 종목 목록 표시
-        lines = [f"✅ 장전 데이터 로드 완료", f"성공:{ok} / 실패:{fail}", f"신호 판별 준비가 끝났습니다.", ""]
+        # 로드된 snapshot에서 전일 날짜 추출
+        with self._snapshot_lock:
+            prev_date = next(
+                (v.get("date", "") for v in self._prev_snapshot_cache.values() if v and v.get("date")),
+                ""
+            )
+        prev_date_str = f"{prev_date[:4]}-{prev_date[4:6]}-{prev_date[6:]}" if prev_date else "확인 불가"
+        lines = [f"✅ 전일({prev_date_str}) 1분봉 데이터 로드 완료", f"성공:{ok} / 실패:{fail}", f"신호 판별 준비가 끝났습니다.", ""]
         lines.append(f"📋 감시 종목 ({len(all_watch)}개):")
         for s in all_watch:
             m = self._symbol_meta.get(s, {})

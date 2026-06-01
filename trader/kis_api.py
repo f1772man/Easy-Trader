@@ -374,40 +374,34 @@ def _fetch_holiday_output(query_date: str) -> list:
 
 
 def get_prev_trading_date(base_date: str) -> str:
-    """
-    CTCA0903R로 base_date 기준 달력을 조회해
-    base_date 이전 가장 최근 거래일(opnd_yn=Y)을 반환.
-    당월에 없으면 전월 달력을 추가 조회 (월초 공휴일 연속 대응).
-    실패 시 빈 문자열 반환.
-    """
+    base_dt = datetime.strptime(base_date, "%Y%m%d")
+
     def _extract_trading_days(output: list) -> list:
         return [
             str(row.get("bass_dt", "") or "").strip()
-            for row in output
+            for row in output or []
             if str(row.get("bass_dt", "") or "").strip() < base_date
             and str(row.get("opnd_yn", "") or "").strip().upper() == "Y"
         ]
 
-    # 당월 조회
-    output = _fetch_holiday_output(base_date)
-    trading_days = _extract_trading_days(output)
+    for days_back in (1, 10, 30):
+        query_date = (base_dt - timedelta(days=days_back)).strftime("%Y%m%d")
 
-    # 당월에 없으면 전월 추가 조회
-    if not trading_days:
-        base_dt = datetime.strptime(base_date, "%Y%m%d")
-        prev_month_date = (base_dt.replace(day=1) - timedelta(days=1)).strftime("%Y%m%d")
-        logger.info(f"[거래일조회] 당월 거래일 없음 → 전월 조회 ({prev_month_date})")
-        output = _fetch_holiday_output(prev_month_date)
+        try:
+            output = _fetch_holiday_output(query_date)
+        except Exception as e:
+            logger.warning(f"[거래일조회] 조회 실패 ({query_date}): {e}")
+            continue
+
         trading_days = _extract_trading_days(output)
 
-    if not trading_days:
-        logger.warning(f"[거래일조회] {base_date} 이전 거래일 없음")
-        return ""
+        if trading_days:
+            prev = max(trading_days)
+            logger.info(f"[거래일조회] 직전 거래일={prev} (기준={base_date})")
+            return prev
 
-    prev = max(trading_days)
-    logger.info(f"[거래일조회] 직전 거래일={prev} (기준={base_date})")
-    return prev
-
+    logger.warning(f"[거래일조회] {base_date} 이전 거래일 없음")
+    return ""
 
     # ── 전일 1분봉 조회 함수 ──────────────────────────────
 def get_prev_day_1min_candles(symbol: str) -> List[List[Any]]:
