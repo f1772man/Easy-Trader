@@ -1,0 +1,1 @@
+alias deploy='~/easy-trader/deploy.sh'

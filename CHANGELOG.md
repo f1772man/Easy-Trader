@@ -2,6 +2,94 @@
 
 ---
 
+## [2026-06-09]
+
+### 추가
+
+* `engine.py` — `_filter_by_trade_amount()` 당일 상대강도(`tday_rltv`) 기반 복합 점수 종목 선정 추가
+
+  * 기존: 거래대금 순 정렬 → 상위 TOP_N 단순 선정
+  * 변경: 거래대금 상위 풀 추출 → 상대강도 조회 → 복합 점수 정렬 → 상위 TOP_N 선정
+
+  * **설계 근거:**
+    * 거래대금: 시장 관심도 + 유동성 확보 → 진입 가능한 종목 필터
+    * `tday_rltv` (당일 상대강도): 매수/매도 힘의 균형 지표 (100 이상=매수우위, 100 미만=매도우위), 장 초반 방향성 예측력 높음
+    * 거래대금 300억 하한선: 미만 종목은 슬리피지/미체결 위험으로 데이트레이딩 부적합
+    * 복합 점수 비중: 거래대금 0.7 + 상대강도 0.3 (유동성 우선, 방향성 보조)
+
+  * **처리 흐름:**
+    1. 갭 조건 통과 종목 중 거래대금 300억 미만 제외 (하한선 통과 종목이 TOP_N 미만이면 하한선 없이 전체 진행)
+    2. 거래대금 기준 상위 `max(TOP_N × 2, 20)`개 풀 추출
+    3. `FHKST01010300`(주식체결) API로 풀 종목별 `tday_rltv` 조회
+    4. 거래대금 / 상대강도 min-max 정규화 후 복합 점수 산출
+    5. 복합 점수 정렬 → 상위 TOP_N 최종 선정
+
+  * **상대강도 조회 예외 처리:** API 실패 / 응답 없음 → `tday_rltv = 100.0` (중립) 기본값 적용
+  * **Firestore `target_stocks` 저장 필드 추가:** `tday_rltv`, `composite_score`
+  * **텔레그램 알림 변경:** 종목별 상대강도 표시, 제목 "거래대금+상대강도 복합 종목 선정 완료"로 변경
+
+* `engine.py` — `_load_market_gate_phase1()` BLOCK 저신뢰 분기 추가
+
+  * 기존: `policy == "BLOCK" and confidence >= 0.8` 불충족 시 NEUTRAL 분기로 fallthrough → phase2 미실행
+  * 변경: `policy == "BLOCK" and confidence < 0.8` 전용 분기 신설 → 잠정 09:25·7종목, `_gate_pending=True`로 phase2 실행
+  * **설계 근거:** 저신뢰는 "BLOCK 신호가 약하다"가 아니라 "확신이 낮다"는 의미 — BLOCK을 NEUTRAL로 취급하면 하락장 진입 위험
+
+* `engine.py` — `_load_market_gate_phase2()` 전 gate 실행으로 확장
+
+  * 기존: BLOCK 고신뢰(`_gate_block_pending`)만 실행
+  * 변경: 전 gate(`_gate_pending`) 실행 — BULL/NEUTRAL도 당일 실시간 지수로 최종 확정
+  * **설계 근거:** NEUTRAL이어도 당일 코스피/코스닥 +6% 급등 시 09:10 조기 진입 가능해야 함
+
+  * **phase1 잠정값 기준표:**
+
+    | gate | confidence | 잠정 scan_hm | 잠정 top_n |
+    |------|-----------|-------------|-----------|
+    | BULL | ≥ 80% | 09:10 | 10 |
+    | BULL | < 80% | 09:15 | 10 |
+    | NEUTRAL | any | 09:20 | 10 |
+    | BEAR/BLOCK | < 80% | 09:25 | 7 |
+    | BEAR/BLOCK | ≥ 80% | 09:30 | 5 |
+
+  * **phase2 잠정값 기준 ±보정 방식:**
+
+    | 복합점수 | scan_hm 보정 | top_n 보정 |
+    |---------|------------|----------|
+    | ≥ +4 | -10분 | +2 |
+    | ≥ +2 | -5분 | +1 |
+    | 0 ~ +1 | 유지 | 유지 |
+    | -1 ~ -2 | +5분 | -1 |
+    | < -2 | +10분 | -2 |
+
+  * **gate별 클램핑:**
+
+    | gate | scan_hm 범위 | top_n 범위 |
+    |------|------------|----------|
+    | BULL / NEUTRAL | 09:10 ~ 09:25 | 7 ~ 10 |
+    | BEAR/BLOCK 저신뢰 | 09:15 ~ 09:30 | 5 ~ 10 |
+    | BEAR/BLOCK 고신뢰 | 09:20 ~ 09:30 | 5 ~ 7 |
+
+  * phase2 완료 후 텔레그램 1회 발송 (phase1은 잠정이므로 발송 안 함)
+
+### 수정
+
+* `engine.py` — `_gate_block_pending` → `_gate_pending` 변수명 변경
+
+  * 전 gate가 phase2를 거치는 구조로 변경됨에 따라 변수명 일반화
+  * `__init__`, `_rollover_if_needed`, `_tick`, `_load_market_gate_phase1/2`, `_filter_by_trade_amount` 전체 반영
+
+* `engine.py` — `__init__` / `_rollover_if_needed` 상태변수 추가
+
+  * `_market_gate_confidence: float = 0.0`
+  * `_market_gate_policy: str = "ALLOW"`
+
+* `engine.py` — `_rollover_if_needed()` 자정 `_watch_symbols` 보유종목만 리셋 추가
+
+  * 기존: 자정 리셋 없음 → 전일 거래대금 필터 결과 10개가 유지된 채 08:50 워밍업 실행
+  * 변경: 자정에 `_watch_symbols`를 보유종목만 남기도록 리셋 → 08:50 워밍업이 보유종목 전용으로 실행
+  * `_collector.update_symbols()` 동시 갱신
+
+---
+
 ## [2026-05-21]
 
 ### 추가

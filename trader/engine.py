@@ -118,10 +118,12 @@ class TradingEngine:
 
         # 마켓 게이트 (foreign_signal 기반 동적 스캔 타이밍)
         self._market_gate: str = "UNKNOWN"        # gate 값 (BULL/BEAR/NEUTRAL/UNKNOWN)
+        self._market_gate_confidence: float = 0.0 # phase1 신뢰도
+        self._market_gate_policy: str = "ALLOW"   # phase1 entry_policy
         self._market_top_n: int = 10              # 거래대금 필터 선정 종목 수
         self._scan_hm: int = 920                  # 거래대금 필터 실행 기준 시각 (hhmm)
         self._gate_loaded_date: str = ""          # Firestore 로드 완료 날짜 (하루 1회 가드)
-        self._gate_block_pending: bool = False    # BLOCK 고신뢰 → 09:00 이후 코스닥 갭 확인 대기
+        self._gate_pending: bool = False          # 전 gate → phase2 실시간 확정 대기
         self._gate_retry_count: int = 0           # phase1 재시도 횟수 (최대 5회)
 
         # 주문 중복 방지
@@ -280,8 +282,8 @@ class TradingEngine:
         if self._today_opnd_yn != "Y":
             return
 
-        # ── 마켓 게이트 2단계 확정 (09:00~09:10, BLOCK 대기 중인 경우만) ──
-        if self._gate_block_pending and 900 <= hm <= 910:
+        # ── 마켓 게이트 2단계 확정 (09:01~09:10, BLOCK 대기 중인 경우만) ──
+        if self._gate_pending and 901 <= hm <= 910:
             self._load_market_gate_phase2()
 
         # ── 거래대금 필터: 동적 시각(scan_hm) 자동 실행 (하루 1회) ──
@@ -359,11 +361,22 @@ class TradingEngine:
 
         # 마켓 게이트 리셋 (다음날 새로 로드)
         self._market_gate = "UNKNOWN"
+        self._market_gate_confidence = 0.0
+        self._market_gate_policy = "ALLOW"
         self._market_top_n = 10
         self._scan_hm = 920
         self._gate_loaded_date = ""
-        self._gate_block_pending = False
+        self._gate_pending = False
         self._gate_retry_count = 0
+
+        # watch_symbols 리셋 → 보유종목만 유지 (08:50 워밍업이 보유종목 전용으로 실행되도록)
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+        if self._watch_symbols != holding_symbols:
+            self._watch_symbols = holding_symbols[:]
+            if self._collector:
+                self._collector.update_symbols(list(self._watch_symbols))
+            logger.info(f"[캐시] watch_symbols 롤오버 리셋 → 보유종목만 유지: {holding_symbols}")
 
         logger.info(f"[캐시] 날짜 변경 → snapshot/strategy/버퍼/주문가드/재매수방지 초기화 ({today_str})")
         if self._collector:
@@ -482,15 +495,11 @@ class TradingEngine:
         [1단계 — 08:50~08:59 워밍업 타임]
         Firestore market_analysis/latest → foreign_signal 필드에서
         전날 외국인 수급 분석 결과를 읽어 scan_hm / market_top_n 을 잠정 결정한다.
-
-        BLOCK + 고신뢰인 경우에는 코스닥 지수가 프리마켓에서 0을 반환할 수 있으므로
-        즉시 판단하지 않고 _gate_block_pending=True 로 표시해 두고,
-        09:00 이후 _load_market_gate_phase2() 에서 코스닥 갭을 확인 후 최종 확정한다.
+        모든 gate가 _gate_pending=True 로 설정되어 09:01 이후 phase2에서 최종 확정한다.
+        텔레그램 발송은 phase2 완료 후 1회만 발송한다.
         """
         if self._gate_loaded_date == today_str:
             return
-
-        from trader.telegram import send_telegram
 
         # ── 1. Firestore 조회 ─────────────────────────────
         try:
@@ -525,221 +534,191 @@ class TradingEngine:
                 )
             return
 
-        self._gate_retry_count = 0  # 성공 시 리셋
-        self._market_gate = gate
+        self._gate_retry_count       = 0
+        self._market_gate            = gate
+        self._market_gate_confidence = confidence
+        self._market_gate_policy     = policy
 
-        # ── 2. 타이밍 + 종목 수 잠정 결정 ─────────────────
-        if policy == "BLOCK" and confidence >= 0.8:
-            # 코스닥 갭 확인 필요 → 2단계에서 최종 확정 (잠정: 최대 지연)
-            self._scan_hm           = 930
-            self._market_top_n      = 5
-            self._gate_block_pending = True
-            label = "⛔ BEAR(BLOCK/고신뢰) → 잠정 09:30·5종목 | 코스닥 갭 확인 대기"
-
-        elif gate == "BULL" and confidence >= 0.8:
+        # ── 2. 잠정값 결정 (전일 수급 기반) ─────────────────
+        if gate == "BULL" and confidence >= 0.8:
             self._scan_hm      = 910
             self._market_top_n = 10
-            label = "🟢 BULL(고신뢰) → 09:10 조기 | 10종목"
-
+            label = "🟢 BULL(고신뢰) → 잠정 09:10·10종목"
         elif gate == "BULL":
             self._scan_hm      = 915
             self._market_top_n = 10
-            label = "🟡 BULL(저신뢰) → 09:15 | 10종목"
-
+            label = "🟡 BULL(저신뢰) → 잠정 09:15·10종목"
         elif gate == "NEUTRAL":
             self._scan_hm      = 920
             self._market_top_n = 10
-            label = "⚪ NEUTRAL → 09:20 기본 | 10종목"
-
+            label = "⚪ NEUTRAL → 잠정 09:20·10종목"
+        elif policy == "BLOCK" and confidence >= 0.8:
+            self._scan_hm      = 930
+            self._market_top_n = 5
+            label = "⛔ BEAR(BLOCK/고신뢰) → 잠정 09:30·5종목"
+        elif policy == "BLOCK":
+            self._scan_hm      = 925
+            self._market_top_n = 7
+            label = "⚠️ BEAR(BLOCK/저신뢰) → 잠정 09:25·7종목"
         elif gate == "BEAR" and confidence >= 0.8:
             self._scan_hm      = 925
             self._market_top_n = 5
-            label = "🔴 BEAR(고신뢰) → 09:25 지연 | 5종목"
-
+            label = "🔴 BEAR(고신뢰) → 잠정 09:25·5종목"
         elif gate == "BEAR":
             self._scan_hm      = 920
             self._market_top_n = 7
-            label = "🟠 BEAR(저신뢰) → 09:20 기본 | 7종목"
-
+            label = "🟠 BEAR(저신뢰) → 잠정 09:20·7종목"
         else:
             self._scan_hm      = 920
             self._market_top_n = 10
-            label = f"❓ {gate}(UNKNOWN) → 09:20 기본 | 10종목"
+            label = f"❓ {gate}(UNKNOWN) → 잠정 09:20·10종목"
 
+        self._gate_pending     = True
         self._gate_loaded_date = today_str
 
         logger.info(
             f"[마켓게이트][1단계] {label} | gate={gate} | policy={policy} | "
             f"confidence={confidence:.0%} | updated={updated_at[:10] if updated_at else '?'}"
         )
-        # BLOCK은 phase2 확정 후 결과를 1회만 발송 (phase1 잠정 알림 생략)
-        if not self._gate_block_pending:
-            send_telegram(
-                f"📊 [마켓게이트] {label}\n"
-                f"gate={gate} | policy={policy} | 신뢰도={confidence:.0%}\n"
-                f"기준일: {updated_at[:10] if updated_at else '?'}"
-            )
+        # 텔레그램은 phase2 확정 후 1회만 발송
 
     def _load_market_gate_phase2(self):
         """
-        [2단계 — 09:00~09:10]
-        BLOCK + 고신뢰(_gate_block_pending=True) 인 경우에만 실행.
-        코스피(0001) + 코스닥(1001) 복합 점수로 BLOCK 해제 여부를 결정한다.
+        [2단계 — 09:01~09:10, 전 gate 실행]
+        코스피(0001) + 코스닥(1001) 실시간 등락률로 phase1 잠정값을 보정해 최종 확정한다.
 
-        복합 점수 산출 (3년 실데이터 기반, 188만건):
-          [분석 근거]
-          - 중간 구간(±0.5% 내): 코스피/코스닥 예측력 차이 1%p 이내 → 동등 처리
-          - 강하락(-1.5% 이하): 코스피가 오히려 더 강한 예측력 → 코스피 하향 비중 동등
-          - 강반등(+1.5% 이상): 코스닥 72% vs 코스피 61% → 코스닥 우위 유지 (3:2 비율)
+        복합 점수 → 잠정 scan_hm 보정:
+          ≥ +4 : -10분 / top_n +2
+          ≥ +2 : -5분  / top_n +1
+           0~+1: 잠정값 유지
+          -1~-2: +5분  / top_n -1
+           < -2: +10분 / top_n -2
 
-          코스닥 (최대 ±3 — 강반등 구간에서만 우위):
-            ≥ +1.5% → +3  (소형주 반등 72%)
-            ≥ +0.5% → +1  (소형주 반등 53%)
-            ≥  0.0% →  0  (소형주 반등 44%)
-            ≥ -0.5% → -1  (소형주 반등 38%)
-            ≥ -1.5% → -1  (소형주 반등 32%, 코스피와 유사)
-            <  -1.5% → -2  (소형주 반등 18%, 코스피 26%보다 낮음)
-
-          코스피 (최대 ±2 — 중간/하락 구간에서 동등):
-            ≥ +1.5% → +2  (대형주 반등 69%)
-            ≥ +0.5% → +1  (대형주 반등 58%)
-            ≥  0.0% →  0
-            ≥ -0.5% → -1
-            ≥ -1.5% → -1
-            <  -1.5% → -2  (대형주 반등 26%, 소형주보다 높음)
-
-          복합 점수 범위: -4 ~ +5
-          점수 → scan_hm / top_n:
-            ≥ 4 → 09:10 / 7종목  (강반등 — 조기 진입)
-            ≥ 2 → 09:15 / 7종목  (보통반등)
-            ≥ 0 → 09:20 / 5종목  (중립)
-            ≥ -2 → 09:25 / 5종목 (약세)
-            <  -2 → 09:30 / 5종목 (강약세 — 최대 지연)
+        gate별 클램핑:
+          BULL / NEUTRAL          : scan_hm [09:10~09:25], top_n [7~10]
+          BEAR/BLOCK 저신뢰        : scan_hm [09:15~09:30], top_n [5~10]
+          BEAR/BLOCK 고신뢰        : scan_hm [09:20~09:30], top_n [5~7]
         """
-        if not self._gate_block_pending:
+        if not self._gate_pending:
             return
 
         from trader.telegram import send_telegram
         from trader.kis_api import get_index_change_rate
 
-        def _retry_index_change_rate(index_code: str, label: str, retry: int = 3, delay: float = 0.5) -> Optional[float]:
-            """지수 등락률 조회 — 09:00 직후 데이터 미준비에 대비해 최대 retry회 재시도."""
+        def _retry_index(index_code: str, label: str, retry: int = 3, delay: float = 0.5) -> Optional[float]:
             for attempt in range(1, retry + 1):
                 value = get_index_change_rate(index_code)
                 if value is not None:
                     if attempt > 1:
-                        logger.info(
-                            f"[마켓게이트][2단계] {label} 지수 조회 성공 "
-                            f"({attempt}/{retry}) | 등락률={value:+.2f}%"
-                        )
+                        logger.info(f"[마켓게이트][2단계] {label} 조회 성공 ({attempt}/{retry}) | {value:+.2f}%")
                     return value
-
-                logger.warning(
-                    f"[마켓게이트][2단계] {label} 지수 미준비 "
-                    f"({attempt}/{retry})"
-                )
+                logger.warning(f"[마켓게이트][2단계] {label} 미준비 ({attempt}/{retry})")
                 if attempt < retry:
                     time.sleep(delay)
-
             return None
 
         try:
-            # ── 1. 코스닥 조회 (최대 3회) ───────────────────
-            kosdaq_ctrt = _retry_index_change_rate("1001", "코스닥")
+            # ── 1. 지수 조회 ──────────────────────────────────
+            kosdaq_ctrt = _retry_index("1001", "코스닥")
             if kosdaq_ctrt is None:
-                logger.warning("[마켓게이트][2단계] 코스닥 지수 3회 조회 실패 → 다음 틱 재시도")
-                return  # pending=True 유지 → 다음 틱에서 다시 3회 재시도
+                logger.warning("[마켓게이트][2단계] 코스닥 3회 실패 → 다음 틱 재시도")
+                return
 
-            # ── 2. 코스피 조회 (최대 3회) ───────────────────
             kospi_failed = False
-            kospi_ctrt = _retry_index_change_rate("0001", "코스피")
+            kospi_ctrt   = _retry_index("0001", "코스피")
             if kospi_ctrt is None:
                 kospi_failed = True
-                logger.warning("[마켓게이트][2단계] 코스피 지수 3회 조회 실패 → 코스피 0으로 처리")
-                kospi_ctrt = 0.0  # 코스피 실패 시 중립으로 처리
+                kospi_ctrt   = 0.0
+                logger.warning("[마켓게이트][2단계] 코스피 3회 실패 → 0으로 처리")
 
-            # ── 3. 복합 점수 산출 (3:2 비율 — 강반등 구간만 코스닥 우위) ────
-            # 코스닥 점수 (최대 ±3)
-            # 강반등(+1.5%↑)에서만 코스피 대비 우위 (72% vs 61%)
-            # 중간/하락 구간은 코스피와 예측력 유사 → 점수 동등
-            if kosdaq_ctrt >= 1.5:    kosdaq_score = 3   # 소형주 반등 72%
-            elif kosdaq_ctrt >= 0.5:  kosdaq_score = 1   # 소형주 반등 53%
-            elif kosdaq_ctrt >= 0.0:  kosdaq_score = 0   # 소형주 반등 44%
-            elif kosdaq_ctrt >= -0.5: kosdaq_score = -1  # 소형주 반등 38%
-            elif kosdaq_ctrt >= -1.5: kosdaq_score = -1  # 소형주 반등 32% (코스피와 유사)
-            else:                     kosdaq_score = -2  # 소형주 반등 18% (코스피 26%보다 낮음)
+            # ── 2. 복합 점수 산출 (코스닥 3:2 코스피) ─────────
+            if kosdaq_ctrt >= 1.5:    kosdaq_score = 3
+            elif kosdaq_ctrt >= 0.5:  kosdaq_score = 1
+            elif kosdaq_ctrt >= 0.0:  kosdaq_score = 0
+            elif kosdaq_ctrt >= -0.5: kosdaq_score = -1
+            elif kosdaq_ctrt >= -1.5: kosdaq_score = -1
+            else:                     kosdaq_score = -2
 
-            # 코스피 점수 (최대 ±2)
-            # 중간/하락 구간에서 코스닥과 동등, 강하락(-1.5%↓)에서 더 강한 예측력
-            if kospi_ctrt >= 1.5:     kospi_score = 2    # 대형주 반등 69%
-            elif kospi_ctrt >= 0.5:   kospi_score = 1    # 대형주 반등 58%
+            if kospi_ctrt >= 1.5:     kospi_score = 2
+            elif kospi_ctrt >= 0.5:   kospi_score = 1
             elif kospi_ctrt >= 0.0:   kospi_score = 0
             elif kospi_ctrt >= -0.5:  kospi_score = -1
             elif kospi_ctrt >= -1.5:  kospi_score = -1
-            else:                     kospi_score = -2   # 대형주 반등 26% (소형주 18%보다 높음)
+            else:                     kospi_score = -2
 
-            total_score = kosdaq_score + kospi_score  # 범위: -4 ~ +5
+            total_score = kosdaq_score + kospi_score
 
-            # ── 3-1. 사후 보정 ───────────────────────────────
-            # 보정 1: 코스피 급락(-1.5% 이하) → 외국인 대형주 매도 지속 신호
-            #         코스닥 반등 여부와 무관하게 최소 09:25 보장
+            # ── 3. 사후 보정 ───────────────────────────────────
             if kospi_ctrt <= -1.5 and total_score > -2:
-                logger.info(
-                    f"[마켓게이트][2단계] 코스피 급락({kospi_ctrt:+.2f}%) → "
-                    f"총점 {total_score:+d} → -2 보정 (최소 09:25)"
-                )
+                logger.info(f"[마켓게이트][2단계] 코스피 급락({kospi_ctrt:+.2f}%) → 총점 {total_score:+d} → -2 보정")
                 total_score = -2
-
-            # 보정 2: 양시장 동반 급락(코스닥≤-1.0% AND 코스피≤-1.0%) → 09:30 강제
-            #         BLOCK 상태에서 양시장 모두 -1% 이상 하락이면 진입 최대 지연
             if kosdaq_ctrt <= -1.0 and kospi_ctrt <= -1.0:
-                logger.info(
-                    f"[마켓게이트][2단계] 양시장 동반 급락 "
-                    f"(코스닥{kosdaq_ctrt:+.2f}% / 코스피{kospi_ctrt:+.2f}%) → "
-                    f"총점 {total_score:+d} → -3 강제 (09:30)"
-                )
+                logger.info(f"[마켓게이트][2단계] 양시장 동반급락 → 총점 {total_score:+d} → -3 강제")
                 total_score = -3
 
-            # ── 4. scan_hm / top_n 결정 ─────────────────────
+            # ── 4. 잠정값 기준 보정 ───────────────────────────
+            gate       = self._market_gate
+            policy     = self._market_gate_policy
+            confidence = self._market_gate_confidence
+            is_high_conf_block = (policy == "BLOCK" and confidence >= 0.8)
+            is_bear_or_block   = (gate == "BEAR" or policy == "BLOCK")
+
+            base_hm = self._scan_hm
+            base_n  = self._market_top_n
+
             if total_score >= 4:
-                self._scan_hm      = 910
-                self._market_top_n = 7
-                result = f"강반등 → 09:10 조기·7종목"
+                delta_min, delta_n = -10, +2
             elif total_score >= 2:
-                self._scan_hm      = 915
-                self._market_top_n = 7
-                result = f"보통반등 → 09:15·7종목"
+                delta_min, delta_n = -5,  +1
             elif total_score >= 0:
-                self._scan_hm      = 920
-                self._market_top_n = 5
-                result = f"중립 → 09:20·5종목"
+                delta_min, delta_n =  0,   0
             elif total_score >= -2:
-                self._scan_hm      = 925
-                self._market_top_n = 5
-                result = f"약세 → 09:25·5종목"
+                delta_min, delta_n = +5,  -1
             else:
-                self._scan_hm      = 930
-                self._market_top_n = 5
-                result = f"강약세 → 09:30 최대지연·5종목"
+                delta_min, delta_n = +10, -2
 
-            self._gate_block_pending = False  # 2단계 완료
+            base_total_min = (base_hm // 100) * 60 + (base_hm % 100)
+            adj_total_min  = base_total_min + delta_min
+            adj_hm = (adj_total_min // 60) * 100 + (adj_total_min % 60)
+            adj_n  = base_n + delta_n
 
-            kospi_label = "조회실패(0으로 처리)" if kospi_failed else f"{kospi_ctrt:+.2f}%"
-            label = (
-                f"코스닥 {kosdaq_ctrt:+.2f}%(점수:{kosdaq_score:+d}) | "
-                f"코스피 {kospi_label}(점수:{kospi_score:+d}) | "
-                f"합계:{total_score:+d} → {result}"
+            # ── 5. gate별 클램핑 ──────────────────────────────
+            if is_high_conf_block:
+                adj_hm = max(920, min(adj_hm, 930))
+                adj_n  = max(5,   min(adj_n,  7))
+            elif is_bear_or_block:
+                adj_hm = max(915, min(adj_hm, 930))
+                adj_n  = max(5,   min(adj_n,  10))
+            else:
+                adj_hm = max(910, min(adj_hm, 925))
+                adj_n  = max(7,   min(adj_n,  10))
+
+            self._scan_hm      = adj_hm
+            self._market_top_n = adj_n
+            self._gate_pending = False
+
+            # ── 6. 결과 로그 / 텔레그램 ──────────────────────
+            scan_str    = f"{adj_hm // 100:02d}:{adj_hm % 100:02d}"
+            kospi_label = "조회실패(0처리)" if kospi_failed else f"{kospi_ctrt:+.2f}%"
+            result      = f"{scan_str}·{adj_n}종목"
+            gate_label  = f"{gate}({'BLOCK/' if policy == 'BLOCK' else ''}{'고신뢰' if confidence >= 0.8 else '저신뢰'})"
+
+            logger.info(
+                f"[마켓게이트][2단계] 코스닥{kosdaq_ctrt:+.2f}%(점수:{kosdaq_score:+d}) | "
+                f"코스피{kospi_label}(점수:{kospi_score:+d}) | "
+                f"합계:{total_score:+d} | 잠정→확정: "
+                f"{base_hm//100:02d}:{base_hm%100:02d}·{base_n}종목 → {result}"
             )
-            logger.info(f"[마켓게이트][2단계] {label}")
             send_telegram(
-                f"📊 [마켓게이트 확정] {result}\n"
+                f"📊 [마켓게이트 확정] {gate_label} → {result}\n"
                 f"코스닥 {kosdaq_ctrt:+.2f}% / 코스피 {kospi_label}\n"
-                f"복합점수: {total_score:+d}"
+                f"복합점수: {total_score:+d} (잠정 {base_hm//100:02d}:{base_hm%100:02d}·{base_n}종목에서 보정)\n"
+                f"gate={gate} | policy={policy} | 신뢰도={confidence:.0%}"
             )
 
         except Exception as e:
-            logger.warning(f"[마켓게이트][2단계] 오류({e}) → BLOCK 유지(09:30)")
-            self._gate_block_pending = False
+            logger.warning(f"[마켓게이트][2단계] 오류({e}) → 잠정값 그대로 확정")
+            self._gate_pending = False
 
     def _filter_by_trade_amount(self):
         """
@@ -752,15 +731,15 @@ class TradingEngine:
         import time as _time
         from trader.telegram import send_telegram
 
-        if self._gate_block_pending:
+        if self._gate_pending:
             logger.warning(
-                "[마켓게이트] BLOCK pending 미해소 상태로 필터 실행 "
-                f"(코스닥 갭 확인 실패) → scan_hm={self._scan_hm}, top_n={self._market_top_n}"
+                "[마켓게이트] gate pending 미해소 상태로 필터 실행 "
+                f"(지수 확인 실패) → scan_hm={self._scan_hm}, top_n={self._market_top_n}"
             )
             send_telegram(
-                "⚠️ [마켓게이트] BLOCK pending 미해소\n코스닥 갭 확인 실패 → 09:30 기본 실행"
+                "⚠️ [마켓게이트] gate pending 미해소\n지수 확인 실패 → 잠정값으로 실행"
             )
-            self._gate_block_pending = False
+            self._gate_pending = False
 
         TOP_N        = self._market_top_n  # gate 기반 동적 종목 수 (기본 10, BEAR 시 5~7)
         API_INTERVAL = 0.2   # 초
@@ -877,18 +856,75 @@ class TradingEngine:
             self._trade_filter_done = True
             return
 
-        # ── 3. 거래대금 기준 정렬 → 상위 TOP_N 선정 ────
-        results.sort(key=lambda x: x["tr_pbmn"], reverse=True)
-        selected = results[:TOP_N]
+        # ── 3. 거래대금 상위 풀 추출 → 당일상대강도(tday_rltv) 복합 점수 정렬 ────
+        # 설계 근거:
+        #   거래대금: 시장 관심도 + 유동성 확보 → 진입 가능한 종목 필터
+        #   tday_rltv: 당일 상대강도 (100 이상=매수우위, 100 미만=매도우위)
+        #              FHKST01010300(주식체결) 응답 필드 — 장 초반 방향성 예측력 높음
+        #   거래대금 하한선(300억): 미만 종목은 슬리피지/미체결 위험
+        #   비중: 거래대금 0.7 + 상대강도 0.3 (유동성 우선, 방향성 보조)
+        MIN_TR_PBMN = 300_0000_0000   # 300억 하한선
+        POOL_SIZE   = max(TOP_N * 2, 20)  # 상대강도 비교 풀 (최소 20개)
 
-        logger.info(f"[거래대금필터] 상위 {len(selected)}개 선정:")
+        # 거래대금 하한선 필터
+        results_filtered = [x for x in results if x["tr_pbmn"] >= MIN_TR_PBMN]
+        if not results_filtered:
+            logger.warning(
+                f"[거래대금필터] 300억 하한선 통과 종목 없음 → 하한선 없이 진행"
+            )
+            results_filtered = results
+
+        results_filtered.sort(key=lambda x: x["tr_pbmn"], reverse=True)
+        pool = results_filtered[:POOL_SIZE]
+
+        # 당일 상대강도 조회 (FHKST01010300 — 주식체결)
+        logger.info(f"[거래대금필터] 상대강도 조회 시작 ({len(pool)}개)")
+        for item in pool:
+            ticker = item["ticker"]
+            try:
+                res = _url_fetch(
+                    "/uapi/domestic-stock/v1/quotations/inquire-ccnl",
+                    "FHKST01010300", "",
+                    {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": ticker},
+                )
+                _time.sleep(API_INTERVAL)
+                if res.isOK():
+                    ccnl_output = res.getBody().output
+                    # output은 최근 체결 리스트 — 첫 번째 레코드의 tday_rltv 사용
+                    if isinstance(ccnl_output, list) and ccnl_output:
+                        item["exec_strength"] = float(ccnl_output[0].get("tday_rltv", 100.0) or 100.0)
+                    else:
+                        item["exec_strength"] = 100.0
+                else:
+                    item["exec_strength"] = 100.0
+                    logger.warning(f"[거래대금필터] {ticker} 상대강도 조회 실패 → 100 기본값")
+            except Exception as e:
+                item["exec_strength"] = 100.0
+                logger.warning(f"[거래대금필터] {ticker} 상대강도 오류: {e} → 100 기본값")
+
+        # min-max 정규화 → 복합 점수 (거래대금 0.7 + 상대강도 0.3)
+        tr_vals = [x["tr_pbmn"]       for x in pool]
+        es_vals = [x["exec_strength"]  for x in pool]
+        tr_min, tr_max = min(tr_vals), max(tr_vals)
+        es_min, es_max = min(es_vals), max(es_vals)
+
+        for item in pool:
+            tr_norm = (item["tr_pbmn"]      - tr_min) / (tr_max - tr_min) if tr_max > tr_min else 1.0
+            es_norm = (item["exec_strength"] - es_min) / (es_max - es_min) if es_max > es_min else 1.0
+            item["composite_score"] = round(tr_norm * 0.7 + es_norm * 0.3, 4)
+
+        pool.sort(key=lambda x: x["composite_score"], reverse=True)
+        selected = pool[:TOP_N]
+
+        logger.info(f"[거래대금필터] 복합점수 상위 {len(selected)}개 선정 (풀:{len(pool)}개):")
         for i, item in enumerate(selected, 1):
             pbmn_bil = item["tr_pbmn"] / 1e8
             logger.info(
                 f"  {i}위 {item['name']}({item['ticker']}) "
                 f"| 거래대금 {pbmn_bil:.0f}억 "
-                f"| 시가갭 {item['gap_pct']:+.1f}% "
-                f"| 현재갭 {item['current_pct']:+.1f}%"
+                f"| 상대강도 {item['exec_strength']:.1f} "
+                f"| 복합점수 {item['composite_score']:.3f} "
+                f"| 시가갭 {item['gap_pct']:+.1f}%"
             )
 
         # ── 4. target_stocks 상위 10개에 거래대금 필드 저장 (merge) ──
@@ -923,6 +959,8 @@ class TradingEngine:
                     "tr_pbmn_date":      today_str,
                     "gap_pct":           item["gap_pct"],
                     "current_pct":       item["current_pct"],
+                    "tday_rltv":         item.get("exec_strength", 100.0),
+                    "composite_score":   item.get("composite_score", 0.0),
                     "score":             item["score"],
                 })
             batch.commit()
@@ -989,12 +1027,13 @@ class TradingEngine:
         self._warmup_market_data()
 
         # ── 7. 텔레그램 알림 ─────────────────────────────
-        lines = [f"💹 <b>거래대금 기준 종목 선정 완료</b> ({now_hm})"]
+        lines = [f"💹 <b>거래대금+상대강도 복합 종목 선정 완료</b> ({now_hm})"]
         for i, item in enumerate(selected, 1):
             pbmn_bil = item["tr_pbmn"] / 1e8
             lines.append(
                 f"{i}위 {item['name']}({item['ticker']}) "
                 f"| {pbmn_bil:.0f}억 "
+                f"| 상대강도 {item.get('exec_strength', 0):.0f} "
                 f"| 시가갭 {item['gap_pct']:+.1f}%"
             )
         send_telegram("\n".join(lines))
