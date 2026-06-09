@@ -88,6 +88,12 @@
   * 변경: 자정에 `_watch_symbols`를 보유종목만 남기도록 리셋 → 08:50 워밍업이 보유종목 전용으로 실행
   * `_collector.update_symbols()` 동시 갱신
 
+* `engine.py` — 장내 재시작 시 거래대금 필터 재선정 방지
+
+  * 기존: `fallback_hm` 초과 미완료 시 무조건 `_filter_by_trade_amount()` 즉시 실행
+  * 변경: Firestore `target_stocks`에 당일 데이터(`tr_pbmn_date`) 존재 시 재선정 스킵 → 보유종목만 `watch_symbols` 유지 후 `_trade_filter_done=True` 처리
+  * **설계 근거:** `scan_hm`은 gate에 따라 09:10~09:30 가변 → 고정 시각 기준 불가, Firestore 실제 데이터 존재 여부가 정확한 판단 기준
+
 ---
 
 ## [2026-05-21]
