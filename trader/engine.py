@@ -298,8 +298,27 @@ class TradingEngine:
 
         # ── 폴백: fallback_hm 초과 후에도 미완료 시 즉시 실행 ──────
         if not self._trade_filter_done and hm > _fallback_hm:
-            logger.warning(f"[거래대금필터] {_fallback_hm} 초과 미완료 → 즉시 실행")
-            self._filter_by_trade_amount()
+            # scan_hm은 gate에 따라 가변(09:10~09:30) → 고정 기준 불가
+            # Firestore target_stocks에 오늘 선정 데이터 존재 여부로 판단
+            try:
+                _today_str = datetime.now(KST).strftime("%Y%m%d")
+                _existing = self._fs.collection("target_stocks") \
+                    .where("tr_pbmn_date", "==", _today_str).limit(1).get()
+                if _existing:
+                    logger.warning("[거래대금필터] 당일 target_stocks 존재 → 재선정 스킵, 보유종목만 유지")
+                    with self._positions_lock:
+                        holding = list(self._positions.keys())
+                    if holding:
+                        self._watch_symbols = holding[:]
+                        if self._collector:
+                            self._collector.update_symbols(holding[:])
+                    self._trade_filter_done = True
+                else:
+                    logger.warning(f"[거래대금필터] {_fallback_hm} 초과 미완료 → 즉시 실행")
+                    self._filter_by_trade_amount()
+            except Exception as e:
+                logger.warning(f"[거래대금필터] target_stocks 조회 실패({e}) → 즉시 실행")
+                self._filter_by_trade_amount()
 
         # ── 거래대금 필터 미완료 시: 보유 포지션만 처리 ──
         if not self._trade_filter_done:
