@@ -43,6 +43,11 @@ TICK_INTERVAL_SECONDS = float(os.environ.get("TICK_INTERVAL_SECONDS", "5").split
 INCLUDE_PARTIAL_5MIN = os.environ.get("INCLUDE_PARTIAL_5MIN", "false").strip().lower() in ("1", "true", "y", "yes")
 HEARTBEAT_INTERVAL_SECONDS = int(os.environ.get("HEARTBEAT_INTERVAL_SECONDS", "15").split("#")[0].strip())
 ORDER_COOLDOWN_SECONDS = float(os.environ.get("ORDER_COOLDOWN_SECONDS", "3").split("#")[0].strip())
+# RVT(상대 거래대금) 기반 종목 선정 토글
+#   false (기본): 기존 거래대금 0.7 + 상대강도 0.3 으로 운영 정렬
+#   true       : RVT 0.625 + 상대강도 0.375 로 운영 정렬 (수십 거래일 검증 후 전환용)
+# 토글 무관하게 두 순위는 항상 계산·로그 출력되며 target_stocks에 함께 저장된다.
+USE_RVT_SCORING = os.environ.get("USE_RVT_SCORING", "false").strip().lower() in ("1", "true", "y", "yes")
 
 
 # ── pandas SMA & EMA 헬퍼 ───────────────────────────────────
@@ -832,6 +837,7 @@ class TradingEngine:
                 stck_oprc    = int(output.get("stck_oprc",    0) or 0)
                 stck_sdpr    = int(output.get("stck_sdpr",    0) or 0)
                 acml_tr_pbmn = int(output.get("acml_tr_pbmn", 0) or 0)
+                acml_vol     = int(output.get("acml_vol",     0) or 0)
 
                 if stck_sdpr <= 0:
                     fail_count += 1
@@ -856,6 +862,7 @@ class TradingEngine:
                     continue
 
                 item["tr_pbmn"]     = acml_tr_pbmn
+                item["acml_vol"]    = acml_vol
                 item["gap_pct"]     = gap_pct
                 item["current_pct"] = current_pct
                 item["price"]       = stck_prpr
@@ -921,7 +928,35 @@ class TradingEngine:
                 item["exec_strength"] = 100.0
                 logger.warning(f"[거래대금필터] {ticker} 상대강도 오류: {e} → 100 기본값")
 
-        # min-max 정규화 → 복합 점수 (거래대금 0.7 + 상대강도 0.3)
+        # ── RVT(상대 거래량) 조회 ────────────────────────────
+        # daily_candles/{ticker}.avg_volume_20d (20일 평균 거래량, 주식 수) 사용.
+        # 거래대금이 아닌 거래량 비율(RVOL)로 평가 — 절대 거래대금이 큰 종목 편향 완화.
+        for item in pool:
+            ticker = item["ticker"]
+            try:
+                snap = self._fs.collection("daily_candles").document(ticker).get()
+                if not snap.exists:
+                    item["avg_volume_20d"] = 0
+                    item["rvt"]            = None
+                    logger.warning(f"[거래대금필터] {ticker} daily_candles 문서 없음 → RVT 제외")
+                    continue
+                data    = snap.to_dict() or {}
+                avg_vol = float(data.get("avg_volume_20d", 0) or 0)
+                item["avg_volume_20d"] = avg_vol
+                if avg_vol > 0 and item["acml_vol"] > 0:
+                    item["rvt"] = round(item["acml_vol"] / avg_vol, 4)
+                else:
+                    item["rvt"] = None
+                    logger.warning(
+                        f"[거래대금필터] {ticker} RVT 계산 불가 "
+                        f"(avg20={avg_vol}, cur_vol={item['acml_vol']}) → 제외"
+                    )
+            except Exception as e:
+                item["avg_volume_20d"] = 0
+                item["rvt"]            = None
+                logger.warning(f"[거래대금필터] {ticker} daily_candles 조회 오류: {e} → RVT 제외")
+
+        # ── A안: 거래대금 0.7 + 상대강도 0.3 (운영 정렬 — 현행 유지) ─────────
         tr_vals = [x["tr_pbmn"]       for x in pool]
         es_vals = [x["exec_strength"]  for x in pool]
         tr_min, tr_max = min(tr_vals), max(tr_vals)
@@ -932,17 +967,78 @@ class TradingEngine:
             es_norm = (item["exec_strength"] - es_min) / (es_max - es_min) if es_max > es_min else 1.0
             item["composite_score"] = round(tr_norm * 0.7 + es_norm * 0.3, 4)
 
-        pool.sort(key=lambda x: x["composite_score"], reverse=True)
-        selected = pool[:TOP_N]
+        # ── B안: RVT 0.625 + 상대강도 0.375 (병행 산출, 검증용) ───────────
+        # 가중치 50/30 → 외국인 20% 제외 후 정규화: 0.5/(0.5+0.3)=0.625, 0.3/(0.5+0.3)=0.375
+        valid_rvts = [x["rvt"] for x in pool if x["rvt"] is not None]
+        if valid_rvts:
+            rvt_min, rvt_max = min(valid_rvts), max(valid_rvts)
+        else:
+            rvt_min, rvt_max = 0.0, 0.0
 
-        logger.info(f"[거래대금필터] 복합점수 상위 {len(selected)}개 선정 (풀:{len(pool)}개):")
+        for item in pool:
+            if item["rvt"] is None:
+                item["rvt_score"] = None
+                continue
+            rvt_norm = (item["rvt"] - rvt_min) / (rvt_max - rvt_min) if rvt_max > rvt_min else 1.0
+            es_norm  = (item["exec_strength"] - es_min) / (es_max - es_min) if es_max > es_min else 1.0
+            item["rvt_score"] = round(rvt_norm * 0.625 + es_norm * 0.375, 4)
+
+        # 두 정렬 모두 수행
+        pool_a = sorted(pool, key=lambda x: x["composite_score"], reverse=True)
+        pool_b = sorted(
+            pool,
+            # RVT 계산 실패 종목은 후순위로
+            key=lambda x: (x["rvt_score"] if x["rvt_score"] is not None else -1),
+            reverse=True,
+        )
+        a_rank_map = {x["ticker"]: i + 1 for i, x in enumerate(pool_a)}
+        b_rank_map = {x["ticker"]: i + 1 for i, x in enumerate(pool_b)}
+        for item in pool:
+            item["a_rank"] = a_rank_map[item["ticker"]]
+            item["b_rank"] = b_rank_map[item["ticker"]]
+
+        # ── 운영 정렬 선택 (USE_RVT_SCORING 토글) ─────────────────────
+        if USE_RVT_SCORING:
+            selected = pool_b[:TOP_N]
+            sort_label = "B안(RVT)"
+        else:
+            selected = pool_a[:TOP_N]
+            sort_label = "A안(거래대금)"
+
+        # ── [종목선정 비교] — 풀 전체 A/B 순위 비교 로그 ────────────
+        logger.info(f"[종목선정 비교] 풀 {len(pool)}개 — 운영 정렬: {sort_label}")
+        logger.info(
+            "  "
+            "A순위 B순위  Δ   "
+            "종목명(코드)        "
+            "현재거래대금  20일평균거래량   RVT   상대강도"
+        )
+        for item in sorted(pool, key=lambda x: x["a_rank"]):
+            pbmn_bil = item["tr_pbmn"] / 1e8
+            avg_vol  = item.get("avg_volume_20d", 0)
+            rvt_str  = f"{item['rvt']:>5.2f}" if item["rvt"] is not None else "  N/A"
+            delta    = item["a_rank"] - item["b_rank"]  # +면 B에서 순위↑(상승), -면 하락
+            arrow    = f"▲{delta}" if delta > 0 else (f"▼{-delta}" if delta < 0 else " 0")
+            name     = f"{item['name']}({item['ticker']})"
+            logger.info(
+                f"  {item['a_rank']:>3}  {item['b_rank']:>3}  {arrow:>3}   "
+                f"{name:<20}  "
+                f"{pbmn_bil:>6.0f}억      "
+                f"{avg_vol:>12,.0f}   "
+                f"{rvt_str}    {item['exec_strength']:>5.1f}"
+            )
+
+        logger.info(f"[거래대금필터] 운영 선정 {len(selected)}개 ({sort_label}):")
         for i, item in enumerate(selected, 1):
             pbmn_bil = item["tr_pbmn"] / 1e8
+            rvt_str  = f"{item['rvt']:.2f}" if item["rvt"] is not None else "N/A"
             logger.info(
                 f"  {i}위 {item['name']}({item['ticker']}) "
                 f"| 거래대금 {pbmn_bil:.0f}억 "
+                f"| RVT {rvt_str} "
                 f"| 상대강도 {item['exec_strength']:.1f} "
-                f"| 복합점수 {item['composite_score']:.3f} "
+                f"| A점수 {item['composite_score']:.3f} "
+                f"| B점수 {item['rvt_score'] if item['rvt_score'] is not None else 'N/A'} "
                 f"| 시가갭 {item['gap_pct']:+.1f}%"
             )
 
@@ -981,6 +1077,14 @@ class TradingEngine:
                     "tday_rltv":         item.get("exec_strength", 100.0),
                     "composite_score":   item.get("composite_score", 0.0),
                     "score":             item["score"],
+                    # ── RVT 백테스트 필드 (운영 정렬 무관, 항상 함께 저장) ──
+                    "acml_vol":          item.get("acml_vol", 0),
+                    "avg_volume_20d":    item.get("avg_volume_20d", 0),
+                    "rvt":               item.get("rvt"),  # None 허용
+                    "rvt_score":         item.get("rvt_score"),
+                    "a_rank":            item.get("a_rank", i),
+                    "b_rank":            item.get("b_rank", i),
+                    "sort_mode":         "B" if USE_RVT_SCORING else "A",
                 })
             batch.commit()
             logger.info(f"[거래대금필터] target_stocks {len(selected)}개 저장 완료")
@@ -1046,12 +1150,15 @@ class TradingEngine:
         self._warmup_market_data()
 
         # ── 7. 텔레그램 알림 ─────────────────────────────
-        lines = [f"💹 <b>거래대금+상대강도 복합 종목 선정 완료</b> ({now_hm})"]
+        sort_tag = "B안(RVT)" if USE_RVT_SCORING else "A안(거래대금)"
+        lines = [f"💹 <b>종목 선정 완료 — {sort_tag}</b> ({now_hm})"]
         for i, item in enumerate(selected, 1):
             pbmn_bil = item["tr_pbmn"] / 1e8
+            rvt_str  = f"{item['rvt']:.2f}" if item.get("rvt") is not None else "N/A"
             lines.append(
                 f"{i}위 {item['name']}({item['ticker']}) "
                 f"| {pbmn_bil:.0f}억 "
+                f"| RVT {rvt_str} "
                 f"| 상대강도 {item.get('exec_strength', 0):.0f} "
                 f"| 시가갭 {item['gap_pct']:+.1f}%"
             )
