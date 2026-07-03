@@ -150,6 +150,11 @@ class TradingEngine:
         # 손절 대기 (symbol → 진입 시 마지막 1분봉 time_key)
         self._stop_loss_pending: dict[str, str] = {}  # ← 추가
 
+        # 일일 실현손익 통계 (당일만, 장 마감 시 요약 로그용)
+        self._daily_realized_pnl: int = 0
+        self._daily_wins: int = 0
+        self._daily_losses: int = 0
+
         # Firestore 클라이언트 (공유 싱글턴 — 매 호출마다 신규 생성 방지)
         self._fs = firestore.Client()
 
@@ -380,6 +385,9 @@ class TradingEngine:
         self._stop_loss_pending.clear()
         self._trade_filter_done = False
         self._market_open_notified = False
+        self._daily_realized_pnl = 0
+        self._daily_wins = 0
+        self._daily_losses = 0
         self._holiday_checked_date = ""   # 다음날 휴장일 재조회를 위해 리셋
         self._today_opnd_yn = "Y"         # 기본값 복원
 
@@ -816,6 +824,9 @@ class TradingEngine:
         results    = []
         fail_count = 0
         skip_count = 0
+        skip_flat  = 0   # 시가갭 1% 미만 (평평)
+        skip_hot   = 0   # 시가갭 15% 초과 (과열)
+        skip_neg   = 0   # 갭 마이너스 + 장중 미회복
 
         for item in candidates:
             ticker = item["ticker"]
@@ -859,6 +870,12 @@ class TradingEngine:
                 cond3 = gap_pct < 0 and stck_lwpr < stck_oprc and low_pct >= 2.0 and gap_hold
                 if not (cond1 or cond2 or cond3):
                     skip_count += 1
+                    if gap_pct > GAP_MAX_PCT:
+                        skip_hot += 1
+                    elif gap_pct >= 0:
+                        skip_flat += 1
+                    else:
+                        skip_neg += 1
                     continue
 
                 item["tr_pbmn"]     = acml_tr_pbmn
@@ -874,7 +891,8 @@ class TradingEngine:
 
         logger.info(
             f"[거래대금필터] 조회 완료: {len(results)}개 통과 / "
-            f"{skip_count}개 갭미달 / {fail_count}개 실패"
+            f"{skip_count}개 갭미달(평평={skip_flat}/과열={skip_hot}/마이너스미회복={skip_neg}) / "
+            f"{fail_count}개 실패"
         )
 
         if not results:
@@ -1170,6 +1188,17 @@ class TradingEngine:
         self._flush_candle_csv(date_str)
         self._last_flush_date = date_str
 
+        total = self._daily_wins + self._daily_losses
+        win_rate = round(self._daily_wins / total * 100, 1) if total else 0.0
+        with self._positions_lock:
+            carryover = list(self._positions.keys())
+        carryover_str = f"{len(carryover)}개: {carryover}" if carryover else "없음"
+        logger.info(
+            f"[일마감요약] {date_str} | "
+            f"매도={total}건 | 승={self._daily_wins} 패={self._daily_losses} 승률={win_rate}% | "
+            f"실현손익={self._daily_realized_pnl:+,}원 | 이월포지션={carryover_str}"
+        )
+
     # ── 종목별 처리 (타이밍 래퍼) ───────────────────────
     def _process_symbol_timed(self, symbol: str, now: datetime):
         t0 = time.time()
@@ -1308,10 +1337,6 @@ class TradingEngine:
 
         signal = result["signal"]
         reason = result["reason"]
-        """
-        if signal not in ("BUY", "SELL") and reason:
-            logger.info(f"[{display}] HOLD | {reason}")
-        """
         energy = result["energy"]
         close = int(df["close"].iloc[i])
 
@@ -1328,7 +1353,22 @@ class TradingEngine:
         last_1m_close = ws_1min[-1][4] if ws_1min else None
         current_price = int(last_1m_close) if last_1m_close else int(close)
 
+        # ── 의미 있는 차단 사유 INFO 출력 ─────────────────
+        _BLOCK_KEYWORDS = ("차단", "하회", "과열", "부족", "이격", "마감시간", "미달", "이탈")
+        if signal != "BUY" and not is_holding and reason and any(k in reason for k in _BLOCK_KEYWORDS):
+            logger.info(f"[HOLD-차단][{display}] {reason} | price={current_price:,}")
+
         if signal == "BUY" and not is_holding:
+            dist_ema5 = round((current_price / ema5_curr - 1) * 100, 1) if ema5_curr else 0
+            prev_vols = [r[5] for r in today_5m[-21:-1]] if len(today_5m) > 1 else []
+            avg_vol_5m = sum(prev_vols) / len(prev_vols) if prev_vols else 0
+            vol_ratio_log = round(today_5m[-1][5] / avg_vol_5m, 1) if avg_vol_5m > 0 and today_5m else 0
+            logger.info(
+                f"[BUY-신호][{display}] reason={reason}"
+                f" | price={current_price:,} | dist_ema5={dist_ema5:+.1f}%"
+                f" | vol≈{vol_ratio_log:.1f}x | energy={energy.get('score', 0)}"
+            )
+
             self._reload_strategy_filter_if_needed()
 
             if reason in self._blocked_reasons:
@@ -1345,6 +1385,12 @@ class TradingEngine:
                     self._finalize_order(symbol, "BUY", bar_time, executed)
 
         elif signal == "SELL" and is_holding:
+            max_profit = round((max_price / entry_price - 1) * 100, 2) if entry_price else 0
+            cur_profit = round((current_price / entry_price - 1) * 100, 2) if entry_price else 0
+            logger.info(
+                f"[SELL-신호][{display}] reason={reason}"
+                f" | price={current_price:,} | cur={cur_profit:+.2f}% | peak={max_profit:+.2f}%"
+            )
             if self._can_place_order(symbol, "SELL", bar_time):
                 executed = False
                 try:
@@ -1641,15 +1687,27 @@ class TradingEngine:
 
         display = f"{raw_name}({symbol})" if raw_name else symbol
 
+        today_str = datetime.now(KST).strftime("%Y%m%d")
+        entry_time = pos.get("entry_time", "")
+        is_carryover = bool(entry_time) and entry_time[:8] != today_str
+        carry_tag = "[이월]" if is_carryover else ""
+
         qty = pos.get("qty", 1)
+        realized_pnl = int((price - entry_price) * qty) if entry_price else 0
         profit_pct = (price / entry_price - 1) * 100 if entry_price else 0
         logger.info(
-            f"[SELL][{symbol}] {display} "
-            f"price={price} qty={qty} profit={profit_pct:.2f}% reason={reason}"
+            f"[SELL]{carry_tag}[{symbol}] {display} "
+            f"price={price:,} qty={qty} "
+            f"realized_pnl={realized_pnl:+,}원 profit={profit_pct:+.2f}% reason={reason}"
         )
 
         result = kis_api.sell_order(symbol, qty, price)
         if result is not None:
+            self._daily_realized_pnl += realized_pnl
+            if profit_pct > 0:
+                self._daily_wins += 1
+            else:
+                self._daily_losses += 1
             with self._positions_lock:
                 self._positions.pop(symbol, None)
             with self._today_sold_lock:  # ✅ race condition 방지

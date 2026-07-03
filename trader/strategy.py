@@ -276,6 +276,11 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
         if hm_int < 900 or hm_int >= 2000:
             return {"signal": "HOLD", "reason": "장외시간", "energy": energy}
 
+        # ── 매수 마감 시간 차단 ──────────────────────────
+        buy_stop_hm = cfg.get("buyStopTime", 1520)
+        if hm_int >= buy_stop_hm:
+            return {"signal": "HOLD", "reason": f"매수마감시간({buy_stop_hm})", "energy": energy}
+
         # ── 상한가 근접 매수 차단 (29%) ──────────────────
         _prev_close_buy = params.get("prevDayClose", 0) or close
         if _prev_close_buy > 0 and close >= _prev_close_buy * 1.29:

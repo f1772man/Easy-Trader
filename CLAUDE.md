@@ -108,3 +108,48 @@ DATA/                       YYYYMMDD/1m/ and YYYYMMDD/5m/ CSV dumps
 - `_positions` and `_today_sold` are mutated from multiple threads; always use their respective locks.
 - `strategy_filter.json` `blocked_reasons` list is the runtime kill-switch for specific buy signals — edit and save; engine picks it up within 5 seconds.
 - `KIS_SVR=vps` routes all orders to the paper trading endpoint. `KIS_SVR=prod` routes to live trading.
+
+## Log Analysis Reference (updated 2026-07-03)
+
+Log files: `/tmp/easy_trader_YYYYMMDD.log` (one per trading day, ~90–130 KB).
+
+### Analysis checklist per day
+
+**[1] Scenario verification**
+- Phase1 (08:50): grep `gate=` `confidence=` `scan_hm` `market_top_n` — confirm market_analysis/latest was read before market open.
+- Phase2 (09:01–09:10): grep `composite` `delta` `clamp` `클램핑` — KOSPI+KOSDAQ score → scan time/count adjustment. Dual-drop clamping forces `-3` adjustment when both indices fall.
+- Confirm actual scan time and selected stock count match Phase2 decisions. Mismatches so far are always "pool shortage" (Firestore `strategy_results` has too few candidates), not a logic bug.
+
+**[2] Trade history**
+- BUY: grep `매수|BUY|진입` → time, ticker, price, reason (GC+전고돌파 / 거래량폭발 / 전일고가돌파)
+- SELL: grep `매도|SELL|청산` → time, reason (트레일링 / 손절 / EMA데드크로스 / 상한가이탈 / 시간청산), P&L
+- Check for **overnight carry** positions: any BUY after ~15:00 with no same-day SELL → will appear as "전일이월"손절at 09:00 next day.
+
+**[3] Known recurring anomalies (seen in June 2026)**
+- **WS disconnects**: 20 of 20 trading days had at least one `WARNING WS 연결 끊김`. Pattern: "no close frame" → "timed out during handshake". Tick gaps during reconnect may distort 5-min candles.
+- **Late-day BUY (15:00–15:30)**: BUY signals after 15:00 cannot be closed same day → forced next-day loss. Seen 06/09 15:19 and 06/22 15:03–15:14 (4 positions, all stopped out next morning).
+- **Intraday restart**: If engine starts after 09:00 (e.g., 06/05 09:23), Phase1 and Phase2 are skipped entirely — scan runs without market gate evaluation. Look for absence of `gate=` log before first trade.
+- **grpc AuthMetadataPluginCallback exception**: Occurs after SSLError on `/token`. Seen 06/05 as cascading failure (WS storm → SSL error → grpc auth failure → Firestore transaction error → RTDB disconnect). Isolated to that day.
+- **Telegram send errors**: `Read timed out` or `ConnectionResetError(104)` — alert may be lost. Seen 06/05 (×2), 06/26 (×1).
+- **P&L log omission**: Occasional SELL log with no pnl field (seen 06/05 코웨이). Daily totals may be understated on those days.
+
+**[4] June 2026 baseline**
+- Trading days: 20 / Win: 40 / Loss: 53 / Win rate: 43%
+- Total realized P&L: +660,935 KRW (paper trading, `KIS_SVR=vps`)
+- Most profit came from overnight carry wins (e.g., 06/18 SK하이닉스 이월 +241,000원, 삼성전기 이월 +129,000원)
+- Worst single day: 06/10 −96,700원 (2 prior-day carryovers + 4 new stop-outs)
+
+### Grep cheatsheet for log analysis
+```bash
+# Phase1/2 scenario
+grep -E "gate=|confidence=|scan_hm|market_top_n|composite|delta|clamp|클램핑" /tmp/easy_trader_YYYYMMDD.log
+
+# Trade events
+grep -E "매수|매도|BUY|SELL|진입|청산|trailing|손절|profit|P&L|손익|reason" /tmp/easy_trader_YYYYMMDD.log
+
+# Anomalies
+grep -E "ERROR|WARNING|Exception|Traceback|WebSocket|reconnect|재연결|오류|실패|불일치" /tmp/easy_trader_YYYYMMDD.log
+
+# Overnight carry check (BUY after 15:00)
+grep "BUY\|매수" /tmp/easy_trader_YYYYMMDD.log | awk -F'[: ]' '$2>=15'
+```
