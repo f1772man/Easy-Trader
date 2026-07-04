@@ -2,6 +2,55 @@
 
 ---
 
+## [2026-07-04]
+
+### 추가
+
+* `trader/minute_store.py` (신규) — 분봉 데이터 인프라 구축 (1단계: 저장·검증)
+
+  * **저장 대상**: 거래대금 필터 300억 floor 통과 후 pool 전체 (`max(TOP_N×2, 20)` 종목) + 보유 포지션
+  * **저장 경로**: `DATA/minute/{YYYYMMDD}/{code}.parquet` (기존 host volume mount 재활용)
+  * **스키마**: `ts, open, high, low, close, volume, acml_volume`
+  * **원자적 저장**: `.tmp` 쓰기 후 `os.replace()` rename
+  * **상태 머신**: `CollectorState` enum — INIT → REST_BACKFILL → WS_RUNNING → (RECONNECT → REST_RECOVERY → WS_RUNNING)* → FINALIZE → VALIDATE
+  * **ts 충돌 규칙**:
+    * (a) WS_RUNNING: WS bar가 REST bar를 항상 overwrite
+    * (b) REST_RECOVERY: incomplete flag bar에 한해 REST가 overwrite
+  * **백필**: 선정 확정 직후 `FHKST03010230` 당일 1분봉 4회 호출, 백그라운드 스레드 실행
+    * `acml_volume` 필드: 현재 running-sum 근사 (2026-07-07 장중 API 실측 후 확정 예정)
+  * **이벤트 로그**: stdout(docker logs 포함) + `DATA/minute/{YYYYMMDD}/events.jsonl`
+  * **Replay Manifest**: `DATA/minute/{YYYYMMDD}/manifest.json` — pool·선정 종목·gate 상태·market_analysis·4종 버전·sha256+파일크기 포함, atomic write
+  * **품질 검증**: hard 오류(OHLC 관계 위반·가격 0 이하·음수 거래량) + soft 경고(직전 종가 대비 ±10% 급변)
+  * **Firestore 아카이빙 신규 컬렉션**: `selection_archive/{date}`, `market_analysis/{date}` (덮어쓰기 금지)
+
+* `trader/ws_tick_collector.py` 수정
+
+  * `register_minute_store(manager)` 메서드 추가 — `MinuteStoreManager` 연결
+  * `_forward_tick_to_store()` 추가 — `_on_tick()` 성공 후 tick 전달 (`ACML_VOL` 포함)
+  * `_ws_main()`: disconnect 시 `on_disconnect()`, reconnect 성공 시 `on_reconnect()` 알림
+
+* `trader/engine.py` 수정
+
+  * `__init__`: `_minute_store: MinuteStoreManager`, `_market_analysis_snapshot: dict` 추가
+  * `run()`: `register_minute_store()` 호출 (WS 시작 전)
+  * `_load_market_gate_phase1()`: `market_analysis/latest` doc 전체를 `_market_analysis_snapshot`에 저장
+  * `_filter_by_trade_amount()`: 선정 완료 후 `init_from_selection()` 호출
+  * `_flush_market_data_once()`: `finalize_day()` + `validate_day()` 호출
+  * `_rollover_if_needed()`: `minute_store.reset_day()` 호출
+
+* `scripts/daily_review.sh` 수정
+
+  * 1.5단계 분봉 품질 검증 스텝 추가 — parquet 파일 로드 후 hard 오류·결측봉 수 집계 출력
+
+* `requirements.txt`: `pyarrow==15.0.2` 추가
+
+### 보류
+
+* `acml_volume` from REST (FHKST03010230): 2026-07-07 장중 실측 후 `_fetch_today_1min_bars()` 업데이트 예정
+* `daily_review.sh` GCS 버킷 백업(rsync): 여유 시 추가
+
+---
+
 ## [2026-06-09]
 
 ### 추가

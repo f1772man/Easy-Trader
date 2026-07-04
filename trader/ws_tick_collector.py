@@ -42,6 +42,11 @@ class WsTickCollector:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._ws = None
         self._connected_event: Optional[asyncio.Event] = None
+        self._minute_store = None  # MinuteStoreManager (선택적 연결)
+
+    def register_minute_store(self, manager):
+        """MinuteStoreManager 연결 — engine.run()에서 WS 시작 전 호출."""
+        self._minute_store = manager
 
     def start(self):
         if self._running:
@@ -224,6 +229,13 @@ class WsTickCollector:
 
                     if self._connected_event:
                         self._connected_event.set()
+                    # 분봉 스토어 reconnect 알림 (초기 연결 포함, 수집기 없으면 no-op)
+                    if self._minute_store:
+                        hhmm_now = datetime.now(KST).strftime("%H%M")
+                        try:
+                            self._minute_store.on_reconnect(hhmm_now, self)
+                        except Exception:
+                            pass
 
                     # 현재 symbols 전체 재구독
                     with self._lock:
@@ -258,6 +270,13 @@ class WsTickCollector:
                 self._ws = None
                 if self._connected_event:
                     self._connected_event.clear()
+                # 분봉 스토어 disconnect 알림
+                if self._minute_store:
+                    hhmm_now = datetime.now(KST).strftime("%H%M")
+                    try:
+                        self._minute_store.on_disconnect(hhmm_now)
+                    except Exception:
+                        pass
                 wait = min(2 * retry, 30)
                 logger.warning(f"[WS] 연결 끊김 ({retry}/{max_retry}): {e} → {wait}초 후 재시도")
                 await asyncio.sleep(wait)
@@ -313,9 +332,26 @@ class WsTickCollector:
 
             self._update_1min(symbol, time_key, price, cntg_vol)
             self._update_5min(symbol, time_key, price, cntg_vol)
+            self._forward_tick_to_store(row)
 
         except Exception as e:
             logger.debug(f"[WS] _on_tick 오류: {e}")
+
+    def _forward_tick_to_store(self, row: dict):
+        """분봉 스토어로 틱 전달. _on_tick 성공 후 호출."""
+        if not self._minute_store:
+            return
+        try:
+            symbol   = str(row.get("MKSC_SHRN_ISCD", "")).strip()
+            hour_str = str(row.get("STCK_CNTG_HOUR", "")).strip().zfill(6)
+            hhmm     = hour_str[:4]
+            price    = int(row.get("STCK_PRPR", 0) or 0)
+            vol      = int(row.get("CNTG_VOL",  0) or 0)
+            acml_vol = int(row.get("ACML_VOL",  0) or 0)
+            if symbol and price and hhmm >= "0900":
+                self._minute_store.on_tick(symbol, hhmm, price, vol, acml_vol)
+        except Exception as e:
+            logger.debug(f"[WS] _forward_tick_to_store 오류: {e}")
 
     def _update_1min(self, symbol: str, time_key: str, price: int, vol: int):
         with self._lock:

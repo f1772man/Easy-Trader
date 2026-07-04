@@ -23,6 +23,7 @@ import pandas as pd
 import numpy as np
 
 import trader.kis_api as kis_api
+from trader.minute_store import MinuteStoreManager
 from trader.ws_tick_collector import WsTickCollector
 from trader.kis_auth import auth, _url_fetch
 from trader.strategy import get_strategy_signal, DEFAULT_CONFIG
@@ -111,6 +112,12 @@ class TradingEngine:
 
         # WebSocket 체결 수신기 (종목 로드 후 start)
         self._collector: WsTickCollector = None
+
+        # 분봉 데이터 인프라
+        self._minute_store: MinuteStoreManager = MinuteStoreManager()
+
+        # market_analysis/latest 스냅샷 (selection 아카이빙 + manifest용)
+        self._market_analysis_snapshot: dict = {}
 
         # 루프/상태 제어
         self._last_heartbeat_ts = 0.0
@@ -245,6 +252,7 @@ class TradingEngine:
 
         self._watch_symbols = holding_symbols[:]
         self._collector = WsTickCollector(list(self._watch_symbols))
+        self._collector.register_minute_store(self._minute_store)
         self._collector.start()
 
         if holding_symbols:
@@ -411,6 +419,7 @@ class TradingEngine:
             logger.info(f"[캐시] watch_symbols 롤오버 리셋 → 보유종목만 유지: {holding_symbols}")
 
         logger.info(f"[캐시] 날짜 변경 → snapshot/strategy/버퍼/주문가드/재매수방지 초기화 ({today_str})")
+        self._minute_store.reset_day()
         if self._collector:
             self._collector.reset_day()
 
@@ -549,6 +558,7 @@ class TradingEngine:
                 return
 
             fs_data    = (doc.to_dict() or {}).get("foreign_signal", {})
+            self._market_analysis_snapshot = doc.to_dict() or {}
             gate       = str(fs_data.get("gate", "UNKNOWN")).strip().upper()
             policy     = str(fs_data.get("entry_policy", "ALLOW")).strip().upper()
             confidence = float(fs_data.get("confidence", 0))
@@ -1158,6 +1168,25 @@ class TradingEngine:
                 self._last_order_ts.pop(sym, None)
 
         self._trade_filter_done = True
+
+        # 분봉 수집 초기화 (pool 전체 저장 대상, 백필은 백그라운드)
+        try:
+            self._minute_store.init_from_selection(
+                pool=pool,
+                selected=selected,
+                gate_state={
+                    "gate":         self._market_gate,
+                    "confidence":   self._market_gate_confidence,
+                    "policy":       self._market_gate_policy,
+                    "scan_hm":      self._scan_hm,
+                    "market_top_n": self._market_top_n,
+                },
+                market_analysis=self._market_analysis_snapshot,
+                ws_collector=self._collector,
+            )
+        except Exception as e:
+            logger.error(f"[MinuteStore] init_from_selection 실패: {e}")
+
         logger.info(
             f"[거래대금필터] watch_symbols 교체 완료: "
             f"{len(new_symbols)}개 (추가={added}, 제거={removed})"
@@ -1187,6 +1216,13 @@ class TradingEngine:
             return
         self._flush_candle_csv(date_str)
         self._last_flush_date = date_str
+
+        # 분봉 parquet 저장 + 품질 검증
+        try:
+            self._minute_store.finalize_day(date_str)
+            self._minute_store.validate_day(date_str)
+        except Exception as e:
+            logger.error(f"[MinuteStore] 마감 처리 실패: {e}")
 
         total = self._daily_wins + self._daily_losses
         win_rate = round(self._daily_wins / total * 100, 1) if total else 0.0

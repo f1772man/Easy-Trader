@@ -97,6 +97,46 @@ if [ "${LINE_COUNT}" -lt 10 ]; then
     die "로그가 너무 적습니다 (${LINE_COUNT}줄). 컨테이너 상태를 확인하세요."
 fi
 
+# ── 1.5단계: 분봉 품질 검증 ──────────────────────────────────
+echo "[1.5/4] 분봉 품질 검증 중..."
+
+VALIDATE_RESULT=$(docker exec "${CONTAINER_NAME}" python3 -c "
+import sys, json
+sys.path.insert(0, '/app')
+from trader.minute_store import MINUTE_DIR, _validate_bars, BarRecord
+from pathlib import Path
+import pandas as pd
+
+date_str = '${TODAY_COMPACT}'
+minute_path = MINUTE_DIR / date_str
+if not minute_path.exists():
+    print(json.dumps({'skipped': True, 'reason': 'no_minute_data'}))
+    sys.exit(0)
+
+results = []
+for pq_file in sorted(minute_path.glob('*.parquet')):
+    symbol = pq_file.stem
+    try:
+        df = pd.read_parquet(pq_file)
+        bars = {}
+        for _, row in df.iterrows():
+            b = BarRecord(ts=row['ts'], open=int(row['open']), high=int(row['high']),
+                          low=int(row['low']), close=int(row['close']),
+                          volume=int(row['volume']), acml_volume=int(row['acml_volume']))
+            bars[b.ts] = b
+        r = _validate_bars(symbol, date_str, bars)
+        results.append(r)
+    except Exception as e:
+        results.append({'symbol': symbol, 'error': str(e)})
+
+hard_total    = sum(len(r.get('hard_errors', [])) for r in results)
+missing_total = sum(r.get('missing_count', 0) for r in results)
+print(json.dumps({'symbols': len(results), 'hard_errors': hard_total,
+                  'missing_bars': missing_total}))
+" 2>/dev/null || echo '{"skipped":true,"reason":"exec_failed"}')
+
+echo "  → 분봉 검증 결과: ${VALIDATE_RESULT}"
+
 # ── 2단계: Claude Code 분석 ─────────────────────────────────
 echo "[2/4] Claude Code 분석 중..."
 
