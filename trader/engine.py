@@ -2045,8 +2045,10 @@ class TradingEngine:
 
         # NXT 종목 대응: exchange → FID_COND_MRKT_DIV_CODE 매핑
         # domestic_stock_functions.py: J:KRX, NX:NXT, UN:통합
+        # exchange 원본값이 로그에 출력되므로 첫 가동일에 불일치 즉시 확인 가능
         exchange = self._symbol_meta.get(symbol, {}).get("exchange", "KRX")
         mrkt_div = "NX" if exchange == "NXT" else "J"
+        logger.info(f"[RSI2시가조회][{display}] exchange={exchange!r} → mrkt_div={mrkt_div!r}")
 
         try:
             res = _url_fetch(
