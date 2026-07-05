@@ -2,6 +2,57 @@
 
 ---
 
+## [2026-07-06]
+
+### 추가
+
+* `trader/engine.py` — RSI2_REVERSAL 종목 전용 시가 진입 경로 구현
+
+  * **`_try_rsi2_early_load()`**: `_tick()` 내 hm==900 에서 1회 실행. Firestore `target_stocks` 조회 후 RSI2 모드 감지 시 `_apply_rsi2_reversal_filter()` 조기 호출 (기존 scan_hm=09:20보다 앞서 watch_symbols 확정). 비역전 모드에서도 `_rsi2_early_check_done` 플래그로 재조회 차단.
+  * **`_execute_rsi2_open_entry()`**: 09:00~09:04 구간 REST `FHKST01010100` 으로 `stck_oprc`(시가) 확인 → 시가+0.5% 지정가 1회 진입. 가드: 시가 상한가 근접(`stck_oprc ≥ stck_sdpr × 1.29`), 금요일 13:30. NXT 종목 시장코드 `"NX"` 자동 분기 (KRX→`"J"`, NXT→`"NX"`). `stck_oprc==0` 이면 attempted 미등록 → 다음 틱 재시도.
+  * **`_process_symbol()` RSI2 블록**: ws_1min 가드 앞 삽입. 미보유 RSI2 종목은 09:00~09:04 시가 진입 전용 경로, 일반 BUY 신호 차단. 09:05 초과 시 `⏰ [RSI2진입포기]` Telegram 발송.
+  * **`_rsi2_entry_attempted`**: 당일 진입 시도(성공·포기·차단) 완료 종목 set. `_rollover_if_needed()` 에서 매일 초기화.
+  * **symbol_meta RSI2 필드 추가**: `stop_loss`(절대가), `exchange`(KRX/NXT) 저장. `_process_symbol()` 에서 RSI2 종목의 `dailyStopLoss`를 symbol_meta의 `stop_loss`로 대체.
+
+### 보류
+
+* **실전 전환 전 필수: RSI2 시가진입 미체결 처리 구현**
+  `(a) 주문번호 추적 + 09:05 미체결 잔량 취소, 또는 (b) ORD_DVSN을 IOC 지정가로 변경 (코드값 KIS 문서 확인 필요)`.
+  현재 09:05 분기는 '시가 미확인' 종목 전용이며 미체결 주문을 취소하지 않음.
+  페이퍼 트레이딩에서는 `buy_order()`가 항상 즉시 체결되므로 현재는 안전하나,
+  페이퍼 성적 평가 시 체결 슬리피지·미체결 탈락이 미반영됨을 유의.
+
+---
+
+## [2026-07-05]
+
+### 추가
+
+* `trader/engine.py` — RSI2 역전 모드 대응 (`_apply_rsi2_reversal_filter`, `_prev_biz_day`)
+
+  * **모드 감지**: `target_stocks` 문서 중 `strategy == 'RSI2_REVERSAL'`이 하나라도 있으면 역전 모드로 자동 전환 (환경변수 불필요)
+  * **재정렬·재선정 금지**: 배치 확정 순위를 그대로 사용. `score` 내림차순은 배치 저장 순서 보완용
+  * **selected_date 검증**: 직전 영업일(`_prev_biz_day`) 비교. 필드 없거나 날짜 불일치 시 fail-closed
+  * **결격 제외**: `temp_stop_yn=Y`(임시거래정지) / `mang_issu_cls_code≠N`(관리종목) / `sltr_yn=Y`(정리매매) / 시가 상한가(`stck_oprc ≥ stck_sdpr × 1.295`)
+  * **market_top_n 적용**: gate 기반 top_n 축소는 유지 (score 상위부터 자름)
+
+* `trader/engine.py` — 폴백 로직 RSI2 분기 추가 (`_tick()`)
+
+  * RSI2 모드 감지 시 `tr_pbmn_date == today` 검사 스킵 → `_filter_by_trade_amount()` 직접 호출
+  * confidence 모드는 기존 `tr_pbmn_date` 검사 동작 유지
+  * `_filter_by_trade_amount()`에 `_preloaded_ts_docs` 선택 인자 추가 (Firestore 재조회 방지)
+
+### 수정
+
+* `trader/engine.py` — `_filter_by_trade_amount()`: RSI2 모드 시 `_apply_rsi2_reversal_filter()` 위임 후 조기 반환. 기존 confidence 모드 로직 무변경
+
+### 보류
+
+* `mrkt_warn_cls_code >= '02'` (투자경고/위험) 결격 추가 여부 — 별도 결정 후 반영
+* `_prev_biz_day()` 공휴일 처리 — 현재 주말만 건너뜀
+
+---
+
 ## [2026-07-04]
 
 ### 추가

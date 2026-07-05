@@ -147,6 +147,8 @@ class TradingEngine:
         # 재매수 방지: 당일 익절 종목 + 매도 시각
         self._today_sold: dict[str, tuple] = {}   # symbol → (timestamp, reason, exit_price)
         self._today_sold_lock = threading.Lock()  # ✅ race condition 방지
+        self._rsi2_entry_attempted: set[str] = set()   # RSI2 당일 진입 시도(또는 포기) 완료 종목
+        self._rsi2_early_check_done: bool = False       # 09:00 Firestore 조회 1회 완료 여부
         self._reenter_cooldown_sec: float = float(
             os.environ.get("REENTER_COOLDOWN_SECONDS", "60").split("#")[0].strip()
         )  # 기본 1분 쿨다운
@@ -333,6 +335,10 @@ class TradingEngine:
         if self._gate_pending and 901 <= hm <= 910:
             self._load_market_gate_phase2()
 
+        # ── RSI2 역전 모드: 09:00 조기 편입 (scan_hm보다 앞서 시가 진입 준비) ──
+        if not self._trade_filter_done and hm == 900 and not self._rsi2_early_check_done:
+            self._try_rsi2_early_load(now)
+
         # ── 거래대금 필터: 동적 시각(scan_hm) 자동 실행 (하루 1회) ──
         _scan_hm  = self._scan_hm                          # gate 기반 동적 시각
         _scan_h   = _scan_hm // 100
@@ -345,24 +351,35 @@ class TradingEngine:
 
         # ── 폴백: fallback_hm 초과 후에도 미완료 시 즉시 실행 ──────
         if not self._trade_filter_done and hm > _fallback_hm:
-            # scan_hm은 gate에 따라 가변(09:10~09:30) → 고정 기준 불가
-            # Firestore target_stocks에 오늘 선정 데이터 존재 여부로 판단
             try:
                 _today_str = datetime.now(KST).strftime("%Y%m%d")
-                _existing = self._fs.collection("target_stocks") \
-                    .where("tr_pbmn_date", "==", _today_str).limit(1).get()
-                if _existing:
-                    logger.warning("[거래대금필터] 당일 target_stocks 존재 → 재선정 스킵, 보유종목만 유지")
-                    with self._positions_lock:
-                        holding = list(self._positions.keys())
-                    if holding:
-                        self._watch_symbols = holding[:]
-                        if self._collector:
-                            self._collector.update_symbols(holding[:])
-                    self._trade_filter_done = True
+                _ts_snap   = list(self._fs.collection("target_stocks").stream())
+                _reversal  = any(
+                    (d.to_dict() or {}).get("strategy") == "RSI2_REVERSAL"
+                    for d in _ts_snap
+                )
+                if _reversal:
+                    # RSI2 모드: tr_pbmn_date 검사 불필요 — _apply_rsi2_reversal_filter에서
+                    # selected_date 직전 영업일 검증 후 처리 (fail-closed 포함)
+                    logger.warning("[거래대금필터] RSI2 역전 모드 감지 → 역전 필터 즉시 실행")
+                    self._filter_by_trade_amount(_ts_snap)
                 else:
-                    logger.warning(f"[거래대금필터] {_fallback_hm} 초과 미완료 → 즉시 실행")
-                    self._filter_by_trade_amount()
+                    _existing = [
+                        d for d in _ts_snap
+                        if (d.to_dict() or {}).get("tr_pbmn_date") == _today_str
+                    ]
+                    if _existing:
+                        logger.warning("[거래대금필터] 당일 target_stocks 존재 → 재선정 스킵, 보유종목만 유지")
+                        with self._positions_lock:
+                            holding = list(self._positions.keys())
+                        if holding:
+                            self._watch_symbols = holding[:]
+                            if self._collector:
+                                self._collector.update_symbols(holding[:])
+                        self._trade_filter_done = True
+                    else:
+                        logger.warning(f"[거래대금필터] {_fallback_hm} 초과 미완료 → 즉시 실행")
+                        self._filter_by_trade_amount()
             except Exception as e:
                 logger.warning(f"[거래대금필터] target_stocks 조회 실패({e}) → 즉시 실행")
                 self._filter_by_trade_amount()
@@ -418,6 +435,8 @@ class TradingEngine:
 
         self.firebase.cleanup_sold_positions()
         self._today_sold.clear()
+        self._rsi2_entry_attempted.clear()
+        self._rsi2_early_check_done = False
         self._touched_limit_up.clear()
         self._stop_loss_pending.clear()
         self._trade_filter_done = False
@@ -821,13 +840,257 @@ class TradingEngine:
             logger.warning(f"[마켓게이트][2단계] 오류({e}) → 잠정값 그대로 확정")
             self._gate_pending = False
 
-    def _filter_by_trade_amount(self):
+    @staticmethod
+    def _prev_biz_day(date: datetime) -> str:
+        """직전 영업일 날짜 반환 (주말만 건너뜀 — 공휴일 미처리)."""
+        d = date.date() - timedelta(days=1)
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+        return d.strftime("%Y%m%d")
+
+    def _try_rsi2_early_load(self, now: datetime):
+        """RSI2 역전 모드 감지 시 09:00에 조기 편입 실행. 비역전 모드 포함 1회만 실행."""
+        self._rsi2_early_check_done = True  # 비역전 모드에서도 재조회 방지
+        try:
+            ts_snap = list(self._fs.collection("target_stocks").stream())
+            is_reversal = any(
+                (d.to_dict() or {}).get("strategy") == "RSI2_REVERSAL"
+                for d in ts_snap
+            )
+            if not is_reversal:
+                return
+            today_str = now.strftime("%Y%m%d")
+            hm_str = str(now.hour * 100 + now.minute)
+            logger.info("[RSI2] 09:00 조기 편입 실행 (시가 진입 준비)")
+            self._apply_rsi2_reversal_filter(ts_snap, now, today_str, hm_str, self._market_top_n)
+        except Exception as e:
+            logger.warning(f"[RSI2] 09:00 조기 편입 조회 실패: {e}")
+
+    def _apply_rsi2_reversal_filter(
+        self, ts_docs: list, now: datetime, today_str: str, now_hm: str, top_n: int
+    ):
+        """
+        RSI2 역전 모드 종목 편입.
+        배치가 전일 16:00에 target_stocks에 저장한 종목을 그대로 사용.
+        재정렬·재선정 금지. score 내림차순은 배치 저장 순서 보완용.
+        selected_date 필드 없으면 fail-closed(스킵).
+        결격 제외: temp_stop_yn / mang_issu_cls_code / sltr_yn / 시가상한가.
+        """
+        import time as _time
+        from trader.telegram import send_telegram
+
+        logger.info(f"[RSI2역전필터] 시작 ({now_hm}) — 배치 확정 순서 유지, 결격 제외만")
+
+        # ── 1. target_stocks 로드 ─────────────────────────────────────────
+        items = []
+        for doc in ts_docs:
+            data = doc.to_dict() or {}
+            if data.get("strategy") != "RSI2_REVERSAL":
+                continue
+            ticker = data.get("ticker", "").strip()
+            if not ticker:
+                continue
+            items.append({
+                "ticker":            ticker,
+                "name":              data.get("name", ticker),
+                "score":             float(data.get("score", 0)),
+                "stop_loss":         float(data.get("stop_loss", 0) or 0),
+                "selected_date":     str(data.get("selected_date", "") or ""),
+                "strategy":          "RSI2_REVERSAL",
+                "passed_strategies": data.get("passed_strategies", []),
+                "financial_grade":   data.get("financial_grade", ""),
+                "exchange":          data.get("exchange", "KRX"),
+                "confidence":        int(data.get("confidence", 0)),
+            })
+
+        if not items:
+            logger.warning("[RSI2역전필터] RSI2_REVERSAL 종목 없음 → 스킵")
+            send_telegram("⚠️ [RSI2역전필터] target_stocks에 역전 종목 없음 → 스킵")
+            self._trade_filter_done = True
+            return
+
+        # ── 2. selected_date 직전 영업일 검증 (fail-closed) ──────────────
+        prev_biz     = self._prev_biz_day(now)
+        sample_date  = items[0]["selected_date"]
+
+        if not sample_date:
+            logger.error(
+                f"[RSI2역전필터] selected_date 필드 없음 → fail-closed (스킵). "
+                f"배치 스키마에 selected_date 추가 필요."
+            )
+            send_telegram("❌ [RSI2역전필터] selected_date 필드 없음 → fail-closed. 배치 스키마 확인 필요.")
+            self._trade_filter_done = True
+            return
+
+        if sample_date != prev_biz:
+            logger.error(
+                f"[RSI2역전필터] selected_date({sample_date}) ≠ 직전영업일({prev_biz}) "
+                f"→ fail-closed (stale 데이터)."
+            )
+            send_telegram(
+                f"❌ [RSI2역전필터] selected_date({sample_date}) ≠ 직전영업일({prev_biz})\n"
+                f"stale 데이터 → fail-closed. 배치 실행 여부 확인 필요."
+            )
+            self._trade_filter_done = True
+            return
+
+        # ── 3. score 내림차순 정렬 → top_n 적용 ──────────────────────────
+        items.sort(key=lambda x: x["score"], reverse=True)
+        items = items[:top_n]
+
+        logger.info(f"[RSI2역전필터] {len(items)}개 종목 결격 검사 시작 (직전영업일={prev_biz})")
+
+        # ── 4. 결격 제외 ─────────────────────────────────────────────────
+        # temp_stop_yn=Y(임시거래정지), mang_issu_cls_code≠N(관리종목),
+        # sltr_yn=Y(정리매매), 시가≥전일종가×1.295(상한가 시가)
+        selected = []
+        excluded = []
+
+        for item in items:
+            ticker = item["ticker"]
+            try:
+                res = _url_fetch(
+                    "/uapi/domestic-stock/v1/quotations/inquire-price",
+                    "FHKST01010100", "",
+                    {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": ticker},
+                )
+                _time.sleep(0.2)
+
+                if not res.isOK():
+                    excluded.append((ticker, item["name"], "API실패"))
+                    logger.warning(f"[RSI2역전필터] {ticker} API실패 → 결격")
+                    continue
+
+                output    = res.getBody().output
+                temp_stop = str(output.get("temp_stop_yn",       "N") or "N").strip()
+                mang_issu = str(output.get("mang_issu_cls_code", "N") or "N").strip()
+                sltr      = str(output.get("sltr_yn",            "N") or "N").strip()
+                stck_sdpr = int(output.get("stck_sdpr", 0) or 0)
+                stck_oprc = int(output.get("stck_oprc", 0) or 0)
+
+                if temp_stop == "Y":
+                    reason = "임시거래정지(temp_stop_yn=Y)"
+                elif mang_issu != "N":
+                    reason = f"관리종목(mang_issu_cls_code={mang_issu})"
+                elif sltr == "Y":
+                    reason = "정리매매(sltr_yn=Y)"
+                elif stck_sdpr > 0 and stck_oprc >= int(stck_sdpr * 1.295):
+                    reason = f"시가상한가({stck_oprc}/{stck_sdpr})"
+                else:
+                    reason = None
+
+                if reason:
+                    logger.warning(f"[RSI2역전필터] {ticker} {reason} → 결격")
+                    excluded.append((ticker, item["name"], reason))
+                else:
+                    selected.append(item)
+
+            except Exception as e:
+                excluded.append((ticker, item["name"], f"오류:{e}"))
+                logger.warning(f"[RSI2역전필터] {ticker} 오류({e}) → 결격")
+
+        if excluded:
+            exc_lines = "\n".join(
+                f"  {name}({code}): {reason}"
+                for code, name, reason in excluded
+            )
+            logger.info(f"[RSI2역전필터] 결격 제외 {len(excluded)}개:\n{exc_lines}")
+            send_telegram(f"⚠️ [RSI2역전필터] 결격 제외 {len(excluded)}개\n{exc_lines}")
+
+        if not selected:
+            logger.warning("[RSI2역전필터] 결격 제외 후 진입 종목 없음 → 스킵")
+            send_telegram("⚠️ [RSI2역전필터] 결격 제외 후 진입 종목 없음")
+            self._trade_filter_done = True
+            return
+
+        logger.info(f"[RSI2역전필터] 최종 선정 {len(selected)}개:")
+        for i, item in enumerate(selected, 1):
+            logger.info(
+                f"  {i}위 {item['name']}({item['ticker']}) | score={item['score']:.1f}"
+            )
+
+        # ── 5. symbol_meta 갱신 ──────────────────────────────────────────
+        for item in selected:
+            self._symbol_meta[item["ticker"]] = {
+                "name":      item["name"],
+                "strategy":  "RSI2_REVERSAL",
+                "score":     item["score"],
+                "stop_loss": item.get("stop_loss", 0.0),  # 절대가(원화) — 배치 저장 단위와 일치해야 함
+                "exchange":  item.get("exchange", "KRX"),
+            }
+
+        # ── 6. watch_symbols 교체 (보유 포지션 강제 편입) ────────────────
+        new_symbols = [item["ticker"] for item in selected]
+        with self._positions_lock:
+            holding_symbols = list(self._positions.keys())
+        for s in holding_symbols:
+            if s not in new_symbols:
+                new_symbols.append(s)
+
+        prev_symbols        = self._watch_symbols[:]
+        self._watch_symbols = new_symbols
+        if self._collector:
+            self._collector.update_symbols(list(self._watch_symbols))
+
+        added   = [s for s in new_symbols if s not in prev_symbols]
+        removed = [s for s in prev_symbols if s not in new_symbols]
+
+        with self._snapshot_lock:
+            for sym in removed:
+                self._prev_snapshot_cache.pop(sym, None)
+        with self._strategy_lock:
+            for sym in removed:
+                self._strategy_cache.pop(sym, None)
+        with self._order_lock:
+            for sym in removed:
+                self._inflight_orders.discard(sym)
+                self._last_order_keys.pop(sym, None)
+                self._last_order_ts.pop(sym, None)
+
+        self._trade_filter_done = True
+
+        # ── 7. MinuteStore 초기화 ─────────────────────────────────────────
+        try:
+            self._minute_store.init_from_selection(
+                pool=selected,
+                selected=selected,
+                gate_state={
+                    "gate":         self._market_gate,
+                    "confidence":   self._market_gate_confidence,
+                    "policy":       self._market_gate_policy,
+                    "scan_hm":      self._scan_hm,
+                    "market_top_n": self._market_top_n,
+                },
+                market_analysis=self._market_analysis_snapshot,
+                ws_collector=self._collector,
+            )
+        except Exception as e:
+            logger.error(f"[MinuteStore] init_from_selection 실패: {e}")
+
+        logger.info(
+            f"[RSI2역전필터] watch_symbols 교체 완료: "
+            f"{len(new_symbols)}개 (추가={added}, 제거={removed})"
+        )
+
+        # ── 8. 전일 데이터 워밍업 ─────────────────────────────────────────
+        self._warmup_market_data()
+
+        # ── 9. 텔레그램 알림 ──────────────────────────────────────────────
+        lines = [f"🔄 <b>RSI2 역전 종목 편입 완료</b> ({now_hm}, {len(selected)}개)"]
+        for i, item in enumerate(selected, 1):
+            lines.append(
+                f"{i}위 {item['name']}({item['ticker']}) | score={item['score']:.1f}"
+            )
+        send_telegram("\n".join(lines))
+
+    def _filter_by_trade_amount(self, _preloaded_ts_docs: list = None):
         """
         strategy_results 전체 거래대금 + 갭 조건 조회 → 상위 TOP_N개로 watch_symbols 교체
         - scan_hm(마켓게이트 기반 동적 시각) 자동 실행 (하루 1회)
         - scan_hm+5분 이후 미완료 시 즉시 실행 (폴백)
         - TOP_N: gate=BULL/NEUTRAL → 10개, BEAR(저신뢰) → 7개, BEAR(고신뢰)/BLOCK → 5개
-        - 엔진 재시작 시 tr_pbmn_date == today 이면 재조회 없이 복원
+        - confidence 모드: tr_pbmn_date == today 이면 재시작 복원 스킵
+        - RSI2 역전 모드: _apply_rsi2_reversal_filter() 위임
         """
         import time as _time
         from trader.telegram import send_telegram
@@ -857,6 +1120,24 @@ class TradingEngine:
         now       = datetime.now(KST)
         today_str = now.strftime("%Y%m%d")
         now_hm    = now.strftime("%H:%M")
+
+        # ── RSI2 역전 모드 감지 ────────────────────────────────────────────
+        # target_stocks에 strategy == 'RSI2_REVERSAL' 종목이 하나라도 있으면 역전 모드.
+        try:
+            _ts_docs   = _preloaded_ts_docs if _preloaded_ts_docs is not None \
+                         else list(self._fs.collection("target_stocks").stream())
+            _is_reversal = any(
+                (d.to_dict() or {}).get("strategy") == "RSI2_REVERSAL"
+                for d in _ts_docs
+            )
+        except Exception as e:
+            logger.warning(f"[역전모드감지] target_stocks 조회 실패({e}) → confidence 모드로 진행")
+            _is_reversal = False
+            _ts_docs     = []
+
+        if _is_reversal:
+            self._apply_rsi2_reversal_filter(_ts_docs, now, today_str, now_hm, TOP_N)
+            return
 
         logger.info(f"[거래대금필터] 시작 ({now_hm}) — strategy_results 전체 조회")
 
@@ -1317,10 +1598,29 @@ class TradingEngine:
         today_5m = self._get_today_5min_for_strategy(symbol, now, include_partial=INCLUDE_PARTIAL_5MIN)
         completed_5m = self._collector.get_5min(symbol) if self._collector else []
 
+        # ── RSI2_REVERSAL 전용 시가 진입 (ws_1min 불필요, REST stck_oprc 사용) ──────
+        if self._symbol_meta.get(symbol, {}).get("strategy") == "RSI2_REVERSAL":
+            with self._positions_lock:
+                _rsi2_holding = bool(self._positions.get(symbol))
+            if not _rsi2_holding:
+                hm_now = now.hour * 100 + now.minute
+                if symbol in self._rsi2_entry_attempted:
+                    return  # 이미 시도(진입 성공 or 포기) → BUY 재시도 없음
+                if 900 <= hm_now <= 904:
+                    self._execute_rsi2_open_entry(symbol, now)
+                    return  # 시도 완료 or 시가 대기 → 이번 틱 종료
+                if hm_now >= 905:
+                    logger.info(f"[RSI2진입포기][{display}] 09:05 초과 시가 미확인 → 진입 포기")
+                    self._rsi2_entry_attempted.add(symbol)
+                    from trader.telegram import send_telegram
+                    send_telegram(f"⏰ [RSI2진입포기] {display} 09:05 초과 시가 미확인 → 당일 진입 포기")
+                return  # 미보유 RSI2: 일반 BUY 경로 차단
+        # ── END RSI2 early entry ────────────────────────────────────────────────
+
         if not ws_1min and not completed_5m:
             logger.debug(f"[{display}] 첫 체결 전 → 대기")
             return
-            
+
         if not today_5m:
             logger.warning(f"[{display}] 5분봉 없음 | 1분봉={len(ws_1min)} | 완성5분봉={len(completed_5m)}")
             return
@@ -1401,7 +1701,11 @@ class TradingEngine:
         daily_vcp_score = strategy_data.get("dailyVcpScore", 0)
         daily_strategy = strategy_data.get("dailyStrategy", "")
         daily_pivot_point = strategy_data.get("dailyPivotPoint", 0.0)
-        daily_stop_loss = strategy_data.get("dailyStopLoss", 0.0)
+        # RSI2: target_stocks stop_loss 필드 사용 (절대가, 원화 단위 — 배치 저장 단위와 일치 필요)
+        if self._symbol_meta.get(symbol, {}).get("strategy") == "RSI2_REVERSAL":
+            daily_stop_loss = float(self._symbol_meta.get(symbol, {}).get("stop_loss", 0.0))
+        else:
+            daily_stop_loss = strategy_data.get("dailyStopLoss", 0.0)
 
         data = df[CSV_COLUMNS].values.tolist()
         can_reenter, trailing_exit_price = self._can_reenter(symbol)
@@ -1725,6 +2029,77 @@ class TradingEngine:
 
         except Exception as e:
             logger.error(f"[daily_summary] 갱신 실패: {e}")
+
+    # ── RSI2 전용 시가 진입 ────────────────────────────
+    def _execute_rsi2_open_entry(self, symbol: str, now: datetime):
+        """RSI2 역전 모드 전용 시가 진입: REST stck_oprc 확인 후 시가+0.5% 지정가.
+
+        페이퍼 트레이딩: buy_order()가 항상 즉시 체결 → 미체결 상태 자체가 없음.
+        실전 전환 시 필수 (둘 중 하나, 현재 미구현):
+          (a) 주문번호 추적 + 09:05 미체결 잔량 취소, 또는
+          (b) ORD_DVSN을 IOC지정가로 변경 (코드값 KIS 문서 확인 필요)
+        주의: 현재 09:05 분기는 '시가 미확인' 종목 전용이며
+        미체결 주문을 취소하지 않음.
+        """
+        display = self._display_name(symbol)
+
+        # NXT 종목 대응: exchange → FID_COND_MRKT_DIV_CODE 매핑
+        # domestic_stock_functions.py: J:KRX, NX:NXT, UN:통합
+        exchange = self._symbol_meta.get(symbol, {}).get("exchange", "KRX")
+        mrkt_div = "NX" if exchange == "NXT" else "J"
+
+        try:
+            res = _url_fetch(
+                "/uapi/domestic-stock/v1/quotations/inquire-price",
+                "FHKST01010100", "",
+                {"FID_COND_MRKT_DIV_CODE": mrkt_div, "FID_INPUT_ISCD": symbol},
+            )
+        except Exception as e:
+            logger.warning(f"[RSI2시가조회][{display}] API 예외({e}) → 다음 틱 재시도")
+            return  # attempted 미등록 → 다음 틱 재시도
+
+        if not res.isOK():
+            logger.warning(f"[RSI2시가조회][{display}] API 실패(mrkt={mrkt_div}) → 다음 틱 재시도")
+            return
+
+        output = res.getBody().output
+        stck_oprc = int(output.get("stck_oprc", 0) or 0)
+        stck_sdpr = int(output.get("stck_sdpr", 0) or 0)  # 기준가(전일종가)
+
+        if stck_oprc == 0:
+            logger.debug(f"[RSI2시가조회][{display}] stck_oprc=0 → 시가 미확인, 다음 틱 재시도")
+            return  # attempted 미등록
+
+        # guard: 금요일 13:30 이후 (진입창 09:00~09:05에서 실질 미동작, 완결성 유지)
+        if now.weekday() == 4 and (now.hour * 100 + now.minute) >= 1330:
+            logger.info(f"[RSI2진입차단][{display}] 금요일오후 → 포기")
+            self._rsi2_entry_attempted.add(symbol)
+            return
+
+        # guard: 시가 상한가 근접 (시가 ≥ 기준가×1.29)
+        if stck_sdpr > 0 and stck_oprc >= int(stck_sdpr * 1.29):
+            logger.info(
+                f"[RSI2진입차단][{display}] 시가상한가근접"
+                f" ({stck_oprc:,}/{stck_sdpr:,}) → 포기"
+            )
+            self._rsi2_entry_attempted.add(symbol)
+            return
+
+        limit_price = int(stck_oprc * 1.005)
+        logger.info(
+            f"[RSI2시가진입][{display}] stck_oprc={stck_oprc:,}"
+            f" limit={limit_price:,} stck_sdpr={stck_sdpr:,} mrkt={mrkt_div}"
+        )
+
+        bar_time = now.strftime("%Y%m%d_0900")  # 당일 09:00 고정 키 (중복주문 방지)
+        if self._can_place_order(symbol, "BUY", bar_time):
+            executed = False
+            try:
+                executed = self._execute_buy(symbol, limit_price, "RSI2_OPEN", {"score": 0})
+            finally:
+                self._finalize_order(symbol, "BUY", bar_time, executed)
+
+        self._rsi2_entry_attempted.add(symbol)  # 성공/실패 무관하게 당일 1회 완료
 
     # ── 매수/매도 실행 ─────────────────────────────────
     def _execute_buy(self, symbol: str, price: int, reason: str, energy: dict) -> bool:
