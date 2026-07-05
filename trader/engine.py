@@ -274,7 +274,12 @@ class TradingEngine:
                 wake_str = next_check.strftime("%m/%d %H:%M")
                 logger.info(f"[휴장일루프] {now.strftime('%Y%m%d')}({day_label}) 비거래일 → {wake_str} KST 재확인 ({sleep_secs/3600:.1f}h)")
                 send_telegram(f"🛌 [휴장일] {now.strftime('%Y-%m-%d')}({day_label}) → {wake_str} KST 재확인")
-                time.sleep(sleep_secs)
+                # 큰 sleep 대신 60초 단위로 나눠 heartbeat 갱신 (모니터 오알림 방지)
+                slept = 0.0
+                while slept < sleep_secs and self.is_running:
+                    time.sleep(min(60, sleep_secs - slept))
+                    slept += 60
+                    self.firebase.update_heartbeat({"running": True})
                 # 날짜 바뀌면 캐시 리셋 후 거래일 여부 재판단
                 self._holiday_checked_date = ""
                 if self.is_krx_open():
