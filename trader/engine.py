@@ -258,6 +258,30 @@ class TradingEngine:
         if holding_symbols:
             logger.info(f"[보유종목] 장시작 전 구독 준비: {holding_symbols}")
 
+        # ── 비거래일 sleep 루프 (restart:always 재시작 스팸 방지) ──────────────
+        # 부팅 시퀀스가 완료된 뒤에도 비거래일이면 메인 루프에 진입하지 않고
+        # 1시간 간격으로 거래일 전환을 확인한다.
+        if not self.is_krx_open():
+            _WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
+            while self.is_running:
+                now = datetime.now(KST)
+                # 다음 날 08:45까지 한 번에 sleep (매 시간 깨울 필요 없음)
+                next_check = (now + timedelta(days=1)).replace(
+                    hour=8, minute=45, second=0, microsecond=0
+                )
+                sleep_secs = max(60, (next_check - now).total_seconds())
+                day_label = _WEEKDAY_KO[now.weekday()]
+                wake_str = next_check.strftime("%m/%d %H:%M")
+                logger.info(f"[휴장일루프] {now.strftime('%Y%m%d')}({day_label}) 비거래일 → {wake_str} KST 재확인 ({sleep_secs/3600:.1f}h)")
+                send_telegram(f"🛌 [휴장일] {now.strftime('%Y-%m-%d')}({day_label}) → {wake_str} KST 재확인")
+                time.sleep(sleep_secs)
+                # 날짜 바뀌면 캐시 리셋 후 거래일 여부 재판단
+                self._holiday_checked_date = ""
+                if self.is_krx_open():
+                    logger.info("[휴장일루프] 거래일 전환 감지 → 정상 루프 시작")
+                    send_telegram("🔔 [거래일전환] 거래일 감지 → 엔진 활성화")
+                    break
+
         while self.is_running:
             try:
                 self._tick()
@@ -463,6 +487,12 @@ class TradingEngine:
         today_str = now.strftime("%Y%m%d")
         if self._holiday_checked_date == today_str:
             return
+        # 주말은 API 호출 없이 즉시 비개장 처리
+        if now.weekday() >= 5:
+            self._today_opnd_yn = "N"
+            self._holiday_checked_date = today_str
+            logger.info(f"[휴장일조회] {today_str} 주말(weekday={now.weekday()}) → 비개장")
+            return
         try:
             opnd_yn = self._fetch_holiday_once(today_str)
         except Exception as e:
@@ -489,6 +519,30 @@ class TradingEngine:
         opnd_yn = str(row["opnd_yn"].iloc[0]).strip().upper()
         logger.info(f"[휴장일조회] {today_str} opnd_yn={opnd_yn}")
         return opnd_yn
+
+    def is_krx_open(self) -> bool:
+        """KRX 개장 여부 판단 (fail-CLOSED).
+
+        우선순위:
+        1. weekday() >= 5 → 즉시 False (API 무관)
+        2. 당일 캐시된 opnd_yn 재사용
+        3. 캐시 없으면 직접 조회 — 실패 시 False(fail-CLOSED)
+        """
+        now = datetime.now(KST)
+        # 1. 주말 확정 차단
+        if now.weekday() >= 5:
+            return False
+        # 2. 당일 캐시 재사용
+        today_str = now.strftime("%Y%m%d")
+        if self._holiday_checked_date == today_str:
+            return self._today_opnd_yn == "Y"
+        # 3. 캐시 미확정 → 직접 조회, 실패 시 fail-CLOSED
+        try:
+            opnd_yn = self._fetch_holiday_once(today_str)
+            return opnd_yn == "Y"
+        except Exception as e:
+            logger.warning(f"[개장판정] 조회 실패({e}) → 비개장으로 처리(fail-CLOSED)")
+            return False
 
     def _maybe_premarket_warmup(self, now: datetime):
         hm = now.hour * 100 + now.minute
@@ -772,6 +826,13 @@ class TradingEngine:
         """
         import time as _time
         from trader.telegram import send_telegram
+
+        # 비거래일 가드 — 정규 트리거·폴백·재시작 복원 모든 경로를 여기서 차단
+        # weekday() >= 5 체크가 첫 API 호출보다 반드시 앞서므로 주말엔 API 미호출
+        if not self.is_krx_open():
+            send_telegram("🛌 [휴장일] 거래대금필터 스킵")
+            self._trade_filter_done = True
+            return
 
         if self._gate_pending:
             logger.warning(
