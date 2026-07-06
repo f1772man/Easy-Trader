@@ -335,8 +335,8 @@ class TradingEngine:
         if self._gate_pending and 901 <= hm <= 910:
             self._load_market_gate_phase2()
 
-        # ── RSI2 역전 모드: 09:00 조기 편입 (scan_hm보다 앞서 시가 진입 준비) ──
-        if not self._trade_filter_done and hm == 900 and not self._rsi2_early_check_done:
+        # ── RSI2 역전 모드: 09:00~09:04 조기 편입 (실패·재시작 시 재시도 창) ──
+        if not self._trade_filter_done and 900 <= hm <= 904 and not self._rsi2_early_check_done:
             self._try_rsi2_early_load(now)
 
         # ── 거래대금 필터: 동적 시각(scan_hm) 자동 실행 (하루 1회) ──
@@ -849,8 +849,11 @@ class TradingEngine:
         return d.strftime("%Y%m%d")
 
     def _try_rsi2_early_load(self, now: datetime):
-        """RSI2 역전 모드 감지 시 09:00에 조기 편입 실행. 비역전 모드 포함 1회만 실행."""
-        self._rsi2_early_check_done = True  # 비역전 모드에서도 재조회 방지
+        """RSI2 역전 모드 감지 시 09:00~09:04에 조기 편입 실행.
+        조회 예외 시 _rsi2_early_check_done=False 유지 → 다음 틱 재시도.
+        비역전 모드 확인 시 True → 이후 틱 불필요한 조회 방지.
+        역전 모드 성공 시 _trade_filter_done=True가 되므로 중복 실행은 상위 가드가 차단.
+        """
         try:
             ts_snap = list(self._fs.collection("target_stocks").stream())
             is_reversal = any(
@@ -858,13 +861,16 @@ class TradingEngine:
                 for d in ts_snap
             )
             if not is_reversal:
+                self._rsi2_early_check_done = True  # 비역전 모드: 재조회 불필요
                 return
             today_str = now.strftime("%Y%m%d")
             hm_str = str(now.hour * 100 + now.minute)
-            logger.info("[RSI2] 09:00 조기 편입 실행 (시가 진입 준비)")
+            logger.info(f"[RSI2] 조기 편입 실행 ({hm_str}, 시가 진입 준비)")
             self._apply_rsi2_reversal_filter(ts_snap, now, today_str, hm_str, self._market_top_n)
+            # 성공 시: _trade_filter_done=True → 상위 가드가 재진입 차단 (플래그 별도 불필요)
         except Exception as e:
-            logger.warning(f"[RSI2] 09:00 조기 편입 조회 실패: {e}")
+            logger.warning(f"[RSI2] 조기 편입 조회 실패, 다음 틱 재시도: {e}")
+            # _rsi2_early_check_done은 False로 유지 → 재시도 허용
 
     def _apply_rsi2_reversal_filter(
         self, ts_docs: list, now: datetime, today_str: str, now_hm: str, top_n: int
@@ -2034,12 +2040,12 @@ class TradingEngine:
     def _execute_rsi2_open_entry(self, symbol: str, now: datetime):
         """RSI2 역전 모드 전용 시가 진입: REST stck_oprc 확인 후 시가+0.5% 지정가.
 
-        페이퍼 트레이딩: buy_order()가 항상 즉시 체결 → 미체결 상태 자체가 없음.
-        실전 전환 시 필수 (둘 중 하나, 현재 미구현):
-          (a) 주문번호 추적 + 09:05 미체결 잔량 취소, 또는
-          (b) ORD_DVSN을 IOC지정가로 변경 (코드값 KIS 문서 확인 필요)
-        주의: 현재 09:05 분기는 '시가 미확인' 종목 전용이며
-        미체결 주문을 취소하지 않음.
+        현재 페이퍼 트레이딩 전제: buy_order()가 즉시 체결 → 미체결 상태 없음.
+
+        # TODO(실계좌 전환 시 필수): 시가 지정가 미체결 처리 구현
+        #   옵션 A — 주문번호 추적 후 09:05에 미체결 잔량 취소 API 호출
+        #   옵션 B — ORD_DVSN을 IOC 지정가로 변경 (KIS API 코드값 문서 확인 필요)
+        #   현재 09:05 분기는 '시가 미확인' 종목 전용이며 미체결 주문을 취소하지 않음.
         """
         display = self._display_name(symbol)
 
