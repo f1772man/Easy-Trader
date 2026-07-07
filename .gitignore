@@ -1,5 +1,6 @@
 .env
 DATA/
+trader/Prompts/
 secrets/
 kis_config/
 *.csv
