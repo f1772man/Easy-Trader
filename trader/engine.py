@@ -156,6 +156,9 @@ class TradingEngine:
         # 상한가 터치 여부 (symbol → bool)
         self._touched_limit_up: dict[str, bool] = {}
 
+        # HOLD-차단 로그 중복 억제 (reason 변화 시에만 INFO 출력)
+        self._last_hold_reason: dict[str, str] = {}
+
         # 손절 대기 (symbol → 진입 시 마지막 1분봉 time_key)
         self._stop_loss_pending: dict[str, str] = {}  # ← 추가
 
@@ -439,6 +442,7 @@ class TradingEngine:
         self._rsi2_early_check_done = False
         self._touched_limit_up.clear()
         self._stop_loss_pending.clear()
+        self._last_hold_reason.clear()
         self._trade_filter_done = False
         self._market_open_notified = False
         self._daily_realized_pnl = 0
@@ -1781,7 +1785,9 @@ class TradingEngine:
         # ── 의미 있는 차단 사유 INFO 출력 ─────────────────
         _BLOCK_KEYWORDS = ("차단", "하회", "과열", "부족", "이격", "마감시간", "미달", "이탈")
         if signal != "BUY" and not is_holding and reason and any(k in reason for k in _BLOCK_KEYWORDS):
-            logger.info(f"[HOLD-차단][{display}] {reason} | price={current_price:,}")
+            if self._last_hold_reason.get(symbol) != reason:
+                logger.info(f"[HOLD-차단][{display}] {reason} | price={current_price:,}")
+                self._last_hold_reason[symbol] = reason
 
         if signal == "BUY" and not is_holding:
             dist_ema5 = round((current_price / ema5_curr - 1) * 100, 1) if ema5_curr else 0
