@@ -2,6 +2,18 @@
 
 ---
 
+## [2026-07-07]
+
+### 변경
+
+* `trader/engine.py` — RSI2 역전 모드 게이트 절단 제거 + 텔레그램 문구 오인 제거
+
+  * **`_apply_rsi2_reversal_filter()` 시그니처에서 `top_n: int` 파라미터 제거**: 호출부(`_try_rsi2_early_load`, `_filter_by_trade_amount` RSI2 분기) 양쪽도 동시 정리.
+  * **`items = items[:top_n]` 슬라이스 삭제**: 마켓게이트 기반 개수 절단 제거. Firestore `target_stocks`에 배치가 기록한 RSI2 종목 전량을 결격 필터(거래정지·관리·정리매매·시가상한가) 통과 조건으로만 걸러 진입. score 내림차순 정렬은 유지(`.stream()` 순서 비결정성 보정 + 텔레그램 랭킹 기준 유지).
+  * **`_load_market_gate_phase2()` 텔레그램 분기**: RSI2 모드(`_symbol_meta` 내 `strategy=="RSI2_REVERSAL"` 항목 존재 시) 에서 `[마켓게이트 확정]` 대신 `[지수 참고]` 메시지 발송. scan_hm/BLOCK/종목수가 RSI2 진입에 미적용임을 명시. confidence 경로는 기존 메시지 무변경.
+
+---
+
 ## [2026-07-06]
 
 ### 추가

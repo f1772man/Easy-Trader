@@ -829,12 +829,25 @@ class TradingEngine:
                 f"합계:{total_score:+d} | 잠정→확정: "
                 f"{base_hm//100:02d}:{base_hm%100:02d}·{base_n}종목 → {result}"
             )
-            send_telegram(
-                f"📊 [마켓게이트 확정] {gate_label} → {result}\n"
-                f"코스닥 {kosdaq_ctrt:+.2f}% / 코스피 {kospi_label}\n"
-                f"복합점수: {total_score:+d} (잠정 {base_hm//100:02d}:{base_hm%100:02d}·{base_n}종목에서 보정)\n"
-                f"gate={gate} | policy={policy} | 신뢰도={confidence:.0%}"
+            is_rsi2 = any(
+                v.get("strategy") == "RSI2_REVERSAL" for v in self._symbol_meta.values()
             )
+            if is_rsi2:
+                send_telegram(
+                    f"📊 [지수 참고] {gate_label}\n"
+                    f"코스닥 {kosdaq_ctrt:+.2f}% / 코스피 {kospi_label}\n"
+                    f"복합점수: {total_score:+d}\n"
+                    f"gate={gate} | policy={policy} | 신뢰도={confidence:.0%}\n"
+                    f"※ RSI2 모드: 09:00 시가 진입 완료, 등록 종목 전량 편입, "
+                    f"scan_hm/BLOCK/종목수 미적용"
+                )
+            else:
+                send_telegram(
+                    f"📊 [마켓게이트 확정] {gate_label} → {result}\n"
+                    f"코스닥 {kosdaq_ctrt:+.2f}% / 코스피 {kospi_label}\n"
+                    f"복합점수: {total_score:+d} (잠정 {base_hm//100:02d}:{base_hm%100:02d}·{base_n}종목에서 보정)\n"
+                    f"gate={gate} | policy={policy} | 신뢰도={confidence:.0%}"
+                )
 
         except Exception as e:
             logger.warning(f"[마켓게이트][2단계] 오류({e}) → 잠정값 그대로 확정")
@@ -866,14 +879,14 @@ class TradingEngine:
             today_str = now.strftime("%Y%m%d")
             hm_str = str(now.hour * 100 + now.minute)
             logger.info(f"[RSI2] 조기 편입 실행 ({hm_str}, 시가 진입 준비)")
-            self._apply_rsi2_reversal_filter(ts_snap, now, today_str, hm_str, self._market_top_n)
+            self._apply_rsi2_reversal_filter(ts_snap, now, today_str, hm_str)
             # 성공 시: _trade_filter_done=True → 상위 가드가 재진입 차단 (플래그 별도 불필요)
         except Exception as e:
             logger.warning(f"[RSI2] 조기 편입 조회 실패, 다음 틱 재시도: {e}")
             # _rsi2_early_check_done은 False로 유지 → 재시도 허용
 
     def _apply_rsi2_reversal_filter(
-        self, ts_docs: list, now: datetime, today_str: str, now_hm: str, top_n: int
+        self, ts_docs: list, now: datetime, today_str: str, now_hm: str
     ):
         """
         RSI2 역전 모드 종목 편입.
@@ -940,9 +953,8 @@ class TradingEngine:
             self._trade_filter_done = True
             return
 
-        # ── 3. score 내림차순 정렬 → top_n 적용 ──────────────────────────
+        # ── 3. score 내림차순 정렬 (개수 절단 없음 — 등록 전량 편입) ─────
         items.sort(key=lambda x: x["score"], reverse=True)
-        items = items[:top_n]
 
         logger.info(f"[RSI2역전필터] {len(items)}개 종목 결격 검사 시작 (직전영업일={prev_biz})")
 
@@ -1142,7 +1154,7 @@ class TradingEngine:
             _ts_docs     = []
 
         if _is_reversal:
-            self._apply_rsi2_reversal_filter(_ts_docs, now, today_str, now_hm, TOP_N)
+            self._apply_rsi2_reversal_filter(_ts_docs, now, today_str, now_hm)
             return
 
         logger.info(f"[거래대금필터] 시작 ({now_hm}) — strategy_results 전체 조회")
