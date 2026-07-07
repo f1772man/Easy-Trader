@@ -829,6 +829,7 @@ class TradingEngine:
                 f"합계:{total_score:+d} | 잠정→확정: "
                 f"{base_hm//100:02d}:{base_hm%100:02d}·{base_n}종목 → {result}"
             )
+            # 주: RSI2 편입 실패 시 _symbol_meta 비어 confidence 문구로 폴백됨(드문 경로, 별도 개선 대상)
             is_rsi2 = any(
                 v.get("strategy") == "RSI2_REVERSAL" for v in self._symbol_meta.values()
             )
