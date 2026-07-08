@@ -153,6 +153,10 @@ FRIDAY_CONFIG = {
     "trailingStopMul":  0.7,
 }
 
+# RSI2 낙폭과대 전략 전용 고정 손절폭 (매수가 대비 %).
+# ⚠ 잠정값 — 분봉 리플레이 인프라 구축 후 EV 기반으로 재검증 예정(보류). 최적값 아님.
+RSI2_STOP_PCT = 2.0
+
 
 # ════════════════════════════════════════════════════════
 # 메인 신호 판별 함수
@@ -825,19 +829,25 @@ def get_strategy_signal(params: Dict[str, Any]) -> Dict[str, Any]:
 
         # ──────────────────────────────────────────────
         # [C] 손절
+        #   RSI2 모드  → RSI2_STOP_PCT(=2.0%) 고정, 배치 ATR 절대가 무시
         #   dailyStopLoss > 0 → VCP 일봉 손절가 기준
         #   아니면            → cfg.stopLoss 기준
         #   (VCP 손절가가 cfg.stopLoss보다 넓을 수 있으므로 통합 처리)
         # ──────────────────────────────────────────────
-        effective_stop_pct = (
-            abs(daily_stop_loss / entry_price - 1) * 100
-            if daily_stop_loss > 0 and entry_price > 0
-            else cfg.get("stopLoss", 2.0)
-        )
+        is_rsi2 = bool(params.get("isRsi2", False))
+        if is_rsi2:
+            effective_stop_pct = RSI2_STOP_PCT          # 매수가 기준 고정 2%, 배치 절대가 무시
+        else:
+            effective_stop_pct = (
+                abs(daily_stop_loss / entry_price - 1) * 100
+                if daily_stop_loss > 0 and entry_price > 0
+                else cfg.get("stopLoss", 2.0)
+            )
         if current_profit <= -effective_stop_pct:
             logger.debug(
-                f"🛑 [손절대기] 현재수익:{current_profit:.2f}% | 기준:-{effective_stop_pct:.2f}% → engine에서 다음 1분봉 확인"
-            )            
+                f"🛑 [손절대기] 현재수익:{current_profit:.2f}% | 기준:-{effective_stop_pct:.2f}%"
+                f"{' (RSI2고정2%)' if is_rsi2 else ''} → engine에서 다음 1분봉 확인"
+            )
             return {"signal": "SELL", "reason": "손절대기", "energy": energy}
         
         # ──────────────────────────────────────────────

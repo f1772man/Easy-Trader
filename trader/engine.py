@@ -1760,6 +1760,7 @@ class TradingEngine:
             "dailyStrategy": daily_strategy,
             "dailyPivotPoint": daily_pivot_point,
             "dailyStopLoss": daily_stop_loss,
+            "isRsi2": self._symbol_meta.get(symbol, {}).get("strategy") == "RSI2_REVERSAL",
             "touchedLimitUp": self._touched_limit_up.get(symbol, False),
             "trailingExitPrice": trailing_exit_price,
         })
