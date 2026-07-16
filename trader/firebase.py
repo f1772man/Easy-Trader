@@ -267,3 +267,16 @@ class FirebaseClient:
         })
 
         return True
+
+    # ── 장중 관측 스냅샷 (Firestore) ─────────────────
+    def log_obs_snapshot(self, doc_id: str, data: dict) -> bool:
+        """Firestore intraday_snapshots/{doc_id} — 관측 전용, append-only."""
+        if not self._fs:
+            return False
+        try:
+            self._fs.collection("intraday_snapshots").document(doc_id).set(data)
+            return True
+        except Exception as e:
+            logger.error(f"log_obs_snapshot 실패 ({doc_id}): {e}")
+            self.log_error(f"obs_snapshot: {e}")
+            return False

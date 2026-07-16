@@ -2,6 +2,21 @@
 
 ---
 
+## [2026-07-16]
+
+### 추가 (미검증·관측 전용)
+
+* `trader/engine.py`, `trader/firebase.py` — RSI2 장중 6시점 관측 로깅
+
+  * **`_obs_snap_done: set[int]`** (`engine.py`): 완료 시점 집합. `_rollover_if_needed()` 에서 매일 `.clear()`.
+  * **`_tick()` 관측 게이트** (`engine.py`): `_trade_filter_done=True` 분기 내, ThreadPoolExecutor 시작 직전에 삽입. 09:05/10/15/20/25/30 각 시점 한 번만 `_take_obs_snapshot()` 호출. 실패해도 `_obs_snap_done.add()` 로 재시도 차단(중복 방지).
+  * **`_take_obs_snapshot(obs_hm, now)`** (`engine.py`): `_watch_symbols` 전체(진입/미진입 무관)에 대해 `FHKST01010100` 으로 현재가·시가·고가·저가·전일종가·누적거래량·전일대비등락률 조회. `vol_prev`는 `_prev_snapshot_cache[code]["candles_1m"]` 합산 우선, 실패 시 `daily_candles/{code}` 폴백. 지수는 `get_index_change_rate("0001"/"1001")` 재사용. Firestore `intraday_snapshots/{date}_{obs_hm}_{code}` 로 저장.
+  * **`log_obs_snapshot(doc_id, data)`** (`firebase.py`): Firestore `intraday_snapshots` 컬렉션 append-only 기록. 예외는 삼킴(엔진 영향 없음).
+  * 진입·청산 로직(`_process_symbol`, `get_strategy_signal`, 매수·매도 실행 경로, 손절/익절 판정) **무수정**.
+  * TODO: 현재 tick 내 동기 실행(종목수×API + 지수 2회). 실자금 투입 전 데몬 스레드로 분리 필요.
+
+---
+
 ## [2026-07-07]
 
 ### 변경

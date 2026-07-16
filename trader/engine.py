@@ -127,6 +127,7 @@ class TradingEngine:
         self._today_opnd_yn: str = "Y"
         self._trade_filter_done: bool = False   # 당일 거래대금 필터 완료 여부
         self._market_open_notified: bool = False  # 09:00 보유종목 처리 알림 (하루 1회)
+        self._obs_snap_done: set[int] = set()    # 장중 관측 스냅샷 완료 시점 집합 {905,910,...}
 
         # 마켓 게이트 (foreign_signal 기반 동적 스캔 타이밍)
         self._market_gate: str = "UNKNOWN"        # gate 값 (BULL/BEAR/NEUTRAL/UNKNOWN)
@@ -403,6 +404,17 @@ class TradingEngine:
             if not symbols:
                 return
 
+            # ── 장중 관측 스냅샷 (09:05~09:30, 5분 간격, _trade_filter_done 이후만) ──
+            # TODO(실자금 투입 전): 현재 tick 내 동기 실행. 종목수×현재가 API + 지수 2회로
+            #   tick을 수 초 블로킹. 무자금 테스트 단계라 허용. 실매매 전 데몬 스레드로 분리.
+            for obs_hm in (905, 910, 915, 920, 925, 930):
+                if obs_hm not in self._obs_snap_done and hm >= obs_hm:
+                    try:
+                        self._take_obs_snapshot(obs_hm, now)
+                    except Exception as e:
+                        logger.warning(f"[OBS_SNAP] snapshot fail hm={obs_hm}: {e}")
+                    self._obs_snap_done.add(obs_hm)   # 실패해도 재시도 안 함(중복 방지)
+
         tick_start = time.time()
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {executor.submit(self._process_symbol_timed, sym, now): sym for sym in symbols}
@@ -415,6 +427,115 @@ class TradingEngine:
 
         elapsed = time.time() - tick_start
         logger.debug(f"[tick] {len(symbols)}종목 처리 완료 ({elapsed:.2f}s)")
+
+    # ── 장중 관측 스냅샷 ──────────────────────────────────────────────────────
+    def _take_obs_snapshot(self, obs_hm: int, now: datetime):
+        """
+        _watch_symbols 전체에 대해 현재가·거래량·지수 스냅샷을 Firestore에 저장.
+        obs_hm: 905/910/915/920/925/930. 진입·청산 로직과 완전 무관.
+        """
+        import time as _time
+        from trader.kis_auth import _url_fetch
+
+        date_str = now.strftime("%Y%m%d")
+        ts_kst   = now.strftime("%Y-%m-%d %H:%M:%S")
+
+        # ── 지수 등락률 (kospi/kosdaq) ────────────────────────────────────
+        from trader.kis_api import get_index_change_rate
+        try:
+            kospi_pct  = get_index_change_rate("0001")
+        except Exception:
+            kospi_pct  = None
+        try:
+            kosdaq_pct = get_index_change_rate("1001")
+        except Exception:
+            kosdaq_pct = None
+
+        symbols = [s.strip() for s in self._watch_symbols if s.strip()]
+        logger.info(
+            f"[OBS_SNAP] hm={obs_hm} 시작 | 종목={len(symbols)}개 "
+            f"| kospi={kospi_pct} kosdaq={kosdaq_pct}"
+        )
+
+        for code in symbols:
+            try:
+                # ── 현재가 조회 (FHKST01010100) ──────────────────────────
+                res = _url_fetch(
+                    "/uapi/domestic-stock/v1/quotations/inquire-price",
+                    "FHKST01010100", "",
+                    {"FID_COND_MRKT_DIV_CODE": "J", "FID_INPUT_ISCD": code},
+                )
+                _time.sleep(0.1)
+
+                if not res.isOK():
+                    logger.warning(f"[OBS_SNAP] {code} API 실패 → 스킵")
+                    continue
+
+                out = res.getBody().output
+                price      = int(out.get("stck_prpr", 0) or 0)
+                open_price = int(out.get("stck_oprc", 0) or 0)
+                high       = int(out.get("stck_hgpr", 0) or 0)
+                low        = int(out.get("stck_lwpr", 0) or 0)
+                prev_close = int(out.get("stck_sdpr", 0) or 0)
+                acml_vol   = int(out.get("acml_vol",  0) or 0)
+                gap_from_prev = float(out.get("prdy_ctrt", 0) or 0)
+
+                gap_from_open = (
+                    round((price - open_price) / open_price * 100, 2)
+                    if open_price > 0 else None
+                )
+
+                # ── vol_prev: _prev_snapshot_cache candles_1m 합산 우선 ──
+                vol_prev = 0
+                snap = self._prev_snapshot_cache.get(code)
+                if snap and snap.get("candles_1m"):
+                    vol_prev = sum(int(c[5]) for c in snap["candles_1m"])
+                else:
+                    # 폴백: daily_candles/{code} candles[-2]["volume"]
+                    try:
+                        dc_snap = self._fs.collection("daily_candles").document(code).get()
+                        if dc_snap.exists:
+                            candles = (dc_snap.to_dict() or {}).get("candles", [])
+                            # candles[-1]이 오늘이면 [-2]가 전일, 아니면 [-1]이 전일
+                            if candles:
+                                last_date = str(candles[-1].get("date", "") or "")
+                                if last_date == date_str and len(candles) >= 2:
+                                    vol_prev = int(candles[-2].get("volume", 0) or 0)
+                                else:
+                                    vol_prev = int(candles[-1].get("volume", 0) or 0)
+                    except Exception as fb_e:
+                        logger.debug(f"[OBS_SNAP] {code} daily_candles 폴백 실패: {fb_e}")
+
+                vol_ratio = (
+                    round(acml_vol / vol_prev * 100, 1) if vol_prev > 0 else None
+                )
+
+                data = {
+                    "date":          date_str,
+                    "obs_hm":        obs_hm,
+                    "code":          code,
+                    "ts_kst":        ts_kst,
+                    "price":         price,
+                    "open":          open_price,
+                    "high":          high,
+                    "low":           low,
+                    "prev_close":    prev_close,
+                    "gap_from_open": gap_from_open,
+                    "gap_from_prev": gap_from_prev,
+                    "acml_vol":      acml_vol,
+                    "vol_prev":      vol_prev,
+                    "vol_ratio":     vol_ratio,
+                    "kospi_pct":     kospi_pct,
+                    "kosdaq_pct":    kosdaq_pct,
+                }
+
+                doc_id = f"{date_str}_{obs_hm}_{code}"
+                self.firebase.log_obs_snapshot(doc_id, data)
+
+            except Exception as sym_e:
+                logger.warning(f"[OBS_SNAP] {code} 처리 오류 → 스킵: {sym_e}")
+
+        logger.info(f"[OBS_SNAP] hm={obs_hm} 완료")
 
     def _rollover_if_needed(self, now: datetime):
         today_str = now.strftime("%Y%m%d")
@@ -445,6 +566,7 @@ class TradingEngine:
         self._last_hold_reason.clear()
         self._trade_filter_done = False
         self._market_open_notified = False
+        self._obs_snap_done.clear()
         self._daily_realized_pnl = 0
         self._daily_wins = 0
         self._daily_losses = 0
