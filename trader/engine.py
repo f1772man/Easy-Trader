@@ -980,14 +980,6 @@ class TradingEngine:
             logger.warning(f"[마켓게이트][2단계] 오류({e}) → 잠정값 그대로 확정")
             self._gate_pending = False
 
-    @staticmethod
-    def _prev_biz_day(date: datetime) -> str:
-        """직전 영업일 날짜 반환 (주말만 건너뜀 — 공휴일 미처리)."""
-        d = date.date() - timedelta(days=1)
-        while d.weekday() >= 5:
-            d -= timedelta(days=1)
-        return d.strftime("%Y%m%d")
-
     def _try_rsi2_early_load(self, now: datetime):
         """RSI2 역전 모드 감지 시 09:00~09:04에 조기 편입 실행.
         조회 예외 시 _rsi2_early_check_done=False 유지 → 다음 틱 재시도.
@@ -1056,8 +1048,15 @@ class TradingEngine:
             return
 
         # ── 2. selected_date 직전 영업일 검증 (fail-closed) ──────────────
-        prev_biz     = self._prev_biz_day(now)
+        from trader.kis_api import get_prev_trading_date
+        prev_biz = get_prev_trading_date(now.strftime("%Y%m%d"))
         sample_date  = items[0]["selected_date"]
+
+        if not prev_biz:
+            logger.error("[RSI2역전필터] 직전영업일 판정 실패 → fail-closed")
+            send_telegram("❌ [RSI2역전필터] 직전영업일 판정 실패 → fail-closed. 휴장일 API 확인 필요.")
+            self._trade_filter_done = True
+            return
 
         if not sample_date:
             logger.error(
