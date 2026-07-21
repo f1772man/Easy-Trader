@@ -13,6 +13,7 @@ import csv
 import time
 import json
 import logging
+import queue
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
@@ -168,6 +169,10 @@ class TradingEngine:
         self._daily_wins: int = 0
         self._daily_losses: int = 0
 
+        # 비동기 I/O 큐: daily_summary Firestore 기록을 틱 루프 밖 단일 워커가 처리
+        self._io_queue: queue.Queue = queue.Queue()
+        self._io_worker_thread: Optional[threading.Thread] = None
+
         # Firestore 클라이언트 (공유 싱글턴 — 매 호출마다 신규 생성 방지)
         self._fs = firestore.Client()
 
@@ -244,6 +249,8 @@ class TradingEngine:
         auth(svr=svr)
         logger.info(f"✅ KIS 인증 완료 (mode={svr})")
 
+        self._start_io_worker()
+
         from trader.telegram import send_telegram
         send_telegram("🚀 EASY TRADER 엔진 시작\nmode=prod | Firebase 연결 완료")
 
@@ -303,6 +310,15 @@ class TradingEngine:
 
     def stop(self):
         self.is_running = False
+        # io_worker flush: 미처리 daily_summary 유실 방지
+        if self._io_worker_thread and self._io_worker_thread.is_alive():
+            remaining = self._io_queue.qsize()
+            if remaining:
+                logger.info(f"[io_worker] 종료 전 미처리 {remaining}건 flush 대기")
+            self._io_queue.put(None)          # sentinel → 큐 소진 후 워커 종료
+            self._io_worker_thread.join(timeout=30)
+            if self._io_worker_thread.is_alive():
+                logger.warning("[io_worker] 30초 내 종료 미완료 — 강제 진행")
         try:
             self._flush_candle_csv(datetime.now(KST).strftime("%Y%m%d"))
         except Exception as e:
@@ -425,8 +441,10 @@ class TradingEngine:
                 except Exception as e:
                     logger.error(f"종목 처리 오류 ({self._display_name(sym)}): {e}")
 
-        elapsed = time.time() - tick_start
-        logger.debug(f"[tick] {len(symbols)}종목 처리 완료 ({elapsed:.2f}s)")
+        elapsed_ms = int((time.time() - tick_start) * 1000)
+        logger.info(
+            f"[tick] 시작={now.strftime('%H:%M:%S')} | 종목={len(symbols)} | 소요={elapsed_ms}ms"
+        )
 
     # ── 장중 관측 스냅샷 ──────────────────────────────────────────────────────
     def _take_obs_snapshot(self, obs_hm: int, now: datetime):
@@ -2119,6 +2137,35 @@ class TradingEngine:
                 self._last_order_keys[symbol] = key
                 self._last_order_ts[symbol] = now_ts
 
+    # ── 비동기 I/O 워커 ─────────────────────────────────
+    def _start_io_worker(self):
+        """daily_summary Firestore 트랜잭션을 단일 데몬 스레드로 직렬 처리.
+        단일 소비자이므로 동일 문서 경합이 원천 제거된다."""
+        def _worker():
+            while True:
+                task = self._io_queue.get()
+                try:
+                    if task is None:          # sentinel: 종료 신호
+                        break
+                    if task.get("type") == "daily_summary":
+                        try:
+                            self._update_daily_summary(
+                                task["symbol"], task["name"], task["price"],
+                                task["qty"],    task["profit_pct"], task["entry_price"],
+                            )
+                        except Exception as e:
+                            logger.error(f"[io_worker] daily_summary 처리 실패: {e}")
+                    else:
+                        logger.warning(f"[io_worker] 알 수 없는 task type: {task.get('type')}")
+                finally:
+                    self._io_queue.task_done()
+
+        self._io_worker_thread = threading.Thread(
+            target=_worker, daemon=True, name="io-worker"
+        )
+        self._io_worker_thread.start()
+        logger.info("[io_worker] 비동기 I/O 워커 시작")
+
     # ── 당일 거래 요약 갱신 ────────────────────────────────
     def _update_daily_summary(self, symbol: str, name: str, price: int,
                                qty: int, profit_pct: float, entry_price: float):
@@ -2353,10 +2400,15 @@ class TradingEngine:
                 },
             )
             notify_sell(symbol, raw_name, price, reason, profit_pct)
-            self._update_daily_summary(
-                symbol, raw_name, price,
-                qty, profit_pct, entry_price,
-            )
+            self._io_queue.put({
+                "type":        "daily_summary",
+                "symbol":      symbol,
+                "name":        raw_name,
+                "price":       price,
+                "qty":         qty,
+                "profit_pct":  profit_pct,
+                "entry_price": entry_price,
+            })
             return True
 
         return False

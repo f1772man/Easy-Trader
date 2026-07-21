@@ -2,6 +2,28 @@
 
 ---
 
+## [2026-07-21]
+
+### 수정 — Tick 루프 Firestore 블로킹 제거 (Modification 1)
+
+**배경:** 2026-07-21 RSI2 모드에서 SELL×6이 동시 실행되며 `daily_trade_summary/{date}` 문서에 6개 Firestore 트랜잭션이 경합 → 5-retry 직렬 대기 → Tick 2 소요 ~14s. 이 14초 동안 043260 등 미청산 종목이 무감시 상태로 -7.51%까지 낙폭 확대.
+
+**변경 내용 (`trader/engine.py`):**
+
+* `import queue` 추가
+* `__init__`: `_io_queue: queue.Queue`, `_io_worker_thread: Optional[threading.Thread]` 초기화
+* `run()`: `auth()` 직후 `self._start_io_worker()` 호출
+* `stop()`: sentinel(`None`) 전송 + `join(timeout=30)` — 종료 전 미처리 항목 flush
+* `_start_io_worker()` 메서드 추가: 단일 데몬 스레드 `io-worker`가 `_io_queue`를 소비, `daily_summary` task → `_update_daily_summary()` 순차 호출
+* `_execute_sell()`: `_update_daily_summary()` 직접 호출 → `self._io_queue.put({"type":"daily_summary", ...})` 대체
+* `_tick()` 완료 로그: `elapsed_ms` 측정 추가, `[tick] 시작=HH:MM:SS | 종목=N | 소요=Xms` 형식으로 출력
+
+**효과:** `_execute_sell()` 호출자(ThreadPoolExecutor 워커)가 Firestore 트랜잭션 대기 없이 즉시 반환 → Tick 2 블로킹 해소 → 다음 SELL 평가 틱이 정상 주기(~5s)로 복귀.
+
+**보류:** Modification 2 (`_execute_buy` I/O 비동기화), Modification 3 (평가 루프 분리) — Tick 2 소요 개선 확인 후 판단.
+
+---
+
 ## [2026-07-16]
 
 ### 추가 (미검증·관측 전용)
